@@ -1,0 +1,1107 @@
+ARGOS — Especificação Geral do Projeto
+
+«Plataforma inteligente de monitoramento, interpretação e prevenção de riscos climáticos urbanos.»
+
+---
+
+1. FUNÇÕES PRINCIPAIS
+
+1.1 Monitoramento climático
+
+- Monitoramento de chuva
+- Monitoramento de temperatura
+- Monitoramento de vento
+- Monitoramento de umidade
+- Monitoramento de Nivel da água
+- Monitoramento de Terremotos/Deslizamentos
+- Monitoramento de condições meteorológicas em tempo real
+- Consulta de previsões meteorológicas
+- Integração com APIs meteorológicas
+- Uso de dados históricos para análise
+
+- GPS em tempo real dos dispositivos logados no meso grupo de contas no argos que é exibido no mapa onde cada dispositivo está. funciona mesmo offline. 
+
+Fontes previstas
+
+- Open-Meteo
+- Google Weather API
+- Outras fontes compatíveis futuramente
+
+---
+
+1.2 Análise de risco
+
+O ARGOS não deve funcionar apenas como um aplicativo de previsão do tempo.
+
+Seu objetivo é transformar dados ambientais em uma estimativa de risco.
+
+Variáveis consideradas
+
+- Chuva
+- Intensidade e duração da chuva
+- Vento
+- Temperatura
+- Umidade
+- Relevo
+- Deslizamentos
+- Terremotos
+- Proximidade de rios e corpos d'água
+- Nível da água
+- Histórico de ocorrências
+- Características da região
+- Vulnerabilidade da área
+- Exposição da população
+- Relatos da comunidade
+- Dados oficiais disponíveis
+
+---
+
+1.3 Índice de Risco ARGOS
+
+Sistema próprio para representar o nível de risco de uma determinada região.
+
+Escala inicial
+
+Pontuação| Classificação
+0–20| Normal
+21–40| Atenção
+41–60| Moderado
+61–80| Alto
+81–100| Crítico
+
+A metodologia de cálculo deverá ser definida, testada e posteriormente calibrada com dados reais.
+
+---
+
+1.4 Tipos de risco
+
+O sistema deve permitir identificar diferentes categorias de risco, incluindo:
+
+- Alagamentos
+- Enchentes
+- Inundações
+- Ventos fortes
+- Queda de árvores
+- Deslizamentos
+- Terremotos
+- Interdições de vias
+- Elevação de nível de rios
+- Outros riscos urbanos relacionados a eventos climáticos
+
+---
+
+2. MAPA INTELIGENTE
+
+2.1 Mapa de risco
+
+Mapa interativo utilizando camadas de informação por regiões da mesma cidade.
+
+Camadas previstas
+
+- Chuva
+- Temperatura
+- Vento
+- Alagamento
+- Enchentes
+- Deslizamentos
+- Nível da água
+- Ocorrências da população
+- Vulnerabilidade
+- Áreas de proteção
+- Vias afetadas
+
+- Horários e ruas com maior trânsito
+- Localização em tempo real de onde está os outros dispositivos conectados ao mesmo grupo de contas
+
+Tecnologia
+
+- Leaflet
+- Dados geográficos
+- Camadas dinâmicas
+- Geolocalização
+
+---
+
+2.2 Risco espacial
+
+O risco não deve ser tratado como uma única pontuação para toda a cidade.
+
+O sistema deve dividir a região analisada em áreas e calcular diferentes condições para cada uma.
+
+Cidade
+├── Região A
+│   ├── Chuva
+│   ├── Relevo
+│   ├── Histórico
+│   └── Relatos
+│
+├── Região B
+│   ├── Chuva
+│   ├── Relevo
+│   ├── Histórico
+│   └── Relatos
+│
+└── Região C
+    ├── Chuva
+    ├── Relevo
+    ├── Histórico
+    └── Relatos
+
+---
+
+3. ARGOS COMUNIDADE
+
+Sistema colaborativo para registro de ocorrências.
+
+Usuário pode registrar
+
+- Rua alagada
+- Enchente
+- Árvore caída
+- Poste danificado
+- Deslizamento
+- Via bloqueada
+- Rio subindo
+- Outros incidentes relevantes
+
+Informações do relato
+
+- Localização
+- Horário
+- Tipo de ocorrência
+- Descrição
+- Fotografia, obrigatoriamente
+
+Os relatos devem alimentar o mapa e o sistema de análise de risco.
+
+---
+
+4. CONFIABILIDADE DOS RELATOS
+
+O ARGOS não deve considerar automaticamente todo relato como verdadeiro.
+
+A confiabilidade pode considerar:
+
+- Quantidade de relatos semelhantes
+- Distância entre relatos
+- Horário dos relatos
+- Fotografias
+- Consistência entre relatos
+- Dados meteorológicos
+- Dados históricos
+- Confirmação por fonte oficial
+
+Exemplo
+
+Evento: Alagamento
+Confiabilidade: 87%
+
+8 relatos próximos
++
+3 fotografias
++
+chuva intensa registrada
++
+histórico de alagamento
+
+---
+
+5. MAPA VIVO
+
+Integração entre:
+
+Dados meteorológicos
+        +
+Dados geográficos
+        +
+Histórico
+        +
+IA
+        +
+Relatos da população
+        +
+Dados oficiais
+        ↓
+MAPA DE RISCO EM TEMPO REAL
+
+O objetivo é que o mapa represente não apenas a previsão, mas também o estado observado da região.
+
+---
+
+6. INTELIGÊNCIA ARTIFICIAL
+
+A IA deve possuir uma função específica e mensurável.
+
+Objetivo principal
+
+Estimar a probabilidade de ocorrência de determinado evento climático em uma região e período.
+
+Entrada
+
+- Dados meteorológicos
+- Dados geográficos
+- Histórico
+- Localização
+- Características do terreno
+- Ocorrências registradas
+- Dados hidrológicos, quando disponíveis
+
+Saída
+
+Exemplo:
+
+Probabilidade estimada de alagamento
+nas próximas 3 horas:
+
+74%
+
+A IA não deve ser apresentada simplesmente como "uma IA que identifica riscos".
+
+Sua função precisa ser tecnicamente definida.
+
+---
+
+7. MODELO DE RISCO
+
+O ARGOS deve separar conceitos diferentes.
+
+Probabilidade
+
+Qual a chance de determinado evento ocorrer?
+
+Vulnerabilidade
+
+Quanto uma determinada região é suscetível ao evento?
+
+Exposição
+
+Quantas pessoas, estruturas ou serviços podem ser afetados?
+
+Impacto
+
+Qual seria a consequência estimada?
+
+Uma estrutura conceitual possível:
+
+Risco ≈ Probabilidade × Vulnerabilidade × Exposição
+
+A fórmula definitiva deverá ser determinada por testes e validação.
+
+---
+
+8. EXPLICABILIDADE
+
+Todo resultado importante do ARGOS deve poder ser explicado.
+
+Exemplo:
+
+RISCO DE ALAGAMENTO
+82/100 — CRÍTICO
+
+Principais fatores:
+
+🌧️ Chuva prevista       +27
+🌊 Nível da água         +21
+📚 Histórico             +16
+🗺️ Relevo                +10
+👥 Relatos                +8
+
+O usuário deve conseguir entender por que determinada região recebeu determinada classificação.
+
+---
+
+9. INCERTEZA E CONFIANÇA
+
+O ARGOS não deve apresentar previsões como certezas absolutas.
+
+Exemplo:
+
+Risco estimado: 82/100
+Intervalo estimado: 74–89
+Confiança: Alta
+
+A confiança pode considerar:
+
+- Quantidade de dados disponíveis
+- Atualidade dos dados
+- Quantidade de fontes
+- Concordância entre fontes
+- Qualidade dos dados históricos
+- Quantidade de relatos
+- Qualidade das observações
+
+---
+
+10. EVOLUÇÃO TEMPORAL DO RISCO
+
+O sistema deve mostrar como o risco pode evoluir.
+
+Exemplo:
+
+18:00  🟡 Moderado
+19:00  🟠 Alto
+20:00  🔴 Crítico
+21:00  🔴 Crítico
+22:00  🟠 Alto
+23:00  🟡 Moderado
+
+Isso permite que o usuário entenda não apenas a situação atual, mas também quando o risco tende a aumentar ou diminuir.
+
+---
+
+11. SIMULAÇÃO DE CENÁRIOS
+
+O sistema pode permitir análise de hipóteses.
+
+Exemplo:
+
+Cenário atual
+Risco: 58
+
++20% de chuva
+Risco: 71
+
++40% de chuva
+Risco: 84
+
+Objetivo:
+
+- Avaliar cenários
+- Testar comportamento do modelo
+- Estimar possíveis mudanças de risco
+- Auxiliar tomada de decisão
+
+---
+
+12. DETECÇÃO DE ANOMALIAS
+
+O ARGOS deve ser capaz de identificar situações que fogem do comportamento esperado.
+
+Exemplo:
+
+Condição habitual:
+
+30 mm de chuva
+→ normalmente sem alagamento
+
+Situação atual:
+
+30 mm de chuva
+→ 17 relatos de alagamento
+
+O sistema pode identificar:
+
+«Comportamento anômalo detectado.»
+
+Isso pode indicar que existem fatores locais que não estão sendo representados adequadamente pelo modelo.
+
+---
+
+13. MEMÓRIA CLIMÁTICA
+
+Registro histórico dos eventos analisados.
+
+Exemplo
+
+12/08/2026
+
+Chuva: 43 mm
+Ocorrências: 12
+Vias bloqueadas: 2
+Risco máximo: 89/100
+
+O histórico pode ser utilizado para:
+
+- Comparação
+- Análise de padrões
+- Treinamento de modelos
+- Validação
+- Recalibração
+- Identificação de regiões vulneráveis
+
+---
+
+14. APRENDIZADO COM ERROS
+
+Fluxo esperado:
+
+PREVISÃO
+   ↓
+EVENTO REAL
+   ↓
+COMPARAÇÃO
+   ↓
+ERRO IDENTIFICADO
+   ↓
+AVALIAÇÃO DO MODELO
+   ↓
+RECALIBRAÇÃO
+   ↓
+NOVA PREVISÃO
+
+O objetivo é impedir que o sistema permaneça utilizando indefinidamente um modelo que apresenta erros sistemáticos.
+
+---
+
+15. VALIDAÇÃO DO MODELO
+
+O ARGOS deve ser testado utilizando eventos históricos.
+
+Processo
+
+1. Selecionar eventos reais.
+2. Utilizar somente os dados disponíveis antes do evento.
+3. Executar a previsão.
+4. Registrar o resultado.
+5. Comparar com o acontecimento real.
+6. Medir os erros.
+
+Métricas possíveis
+
+- Verdadeiros positivos
+- Verdadeiros negativos
+- Falsos positivos
+- Falsos negativos
+- Precisão
+- Recall
+- F1-score
+- Calibração da probabilidade
+
+---
+
+16. ROTAS ORIENTADAS POR RISCO
+
+O ARGOS deve considerar segurança além de distância ou tempo.
+
+Exemplo
+
+ROTA MAIS RÁPIDA
+18 minutos
+⚠️ atravessa região de alto risco
+
+ROTA ARGOS
+22 minutos
+✅ menor exposição ao risco
+
+Possíveis preferências:
+
+- Mais rápida
+- Mais segura
+- Equilibrada
+
+---
+
+17. ALERTAS INTELIGENTES
+
+O sistema não deve apenas informar a existência de chuva ou risco.
+
+Deve transformar a análise em orientação.
+
+Exemplo
+
+🔴 RISCO ALTO DE ALAGAMENTO
+
+Evite deslocamentos pela região central
+entre 18h e 21h.
+
+Avenida X apresenta risco elevado.
+
+Abrigo mais próximo:
+Escola Y — 1,2 km
+
+Princípio:
+
+DADO
+ ↓
+INTERPRETAÇÃO
+ ↓
+RISCO
+ ↓
+AÇÃO
+
+---
+
+18. ALERTAS PERSONALIZADOS
+
+Possibilidades:
+
+- Residência
+- Escola
+- Trabalho
+- Família
+- Rotas frequentes
+- Regiões específicas
+
+O usuário escolhe quais localidades ou tipos de risco deseja acompanhar.
+
+---
+
+19. ZONAS DE PROTEÇÃO
+
+O mapa pode indicar:
+
+- Escolas
+- Hospitais
+- Postos de saúde
+- Abrigos
+- Prédios públicos
+- Pontos de apoio
+
+Em situação de risco:
+
+Abrigo mais próximo:
+1,2 km
+
+---
+
+20. PAINEL INSTITUCIONAL
+
+ARGOS Defesa Civil
+
+Interface destinada a órgãos públicos e instituições.
+
+Informações
+
+- Mapa geral
+- Regiões críticas
+- Ocorrências
+- Níveis de rios
+- Previsões
+- Histórico
+- Vias bloqueadas
+- Alertas emitidos
+- Evolução dos riscos
+- Dados da comunidade
+
+Objetivo
+
+Transformar o ARGOS de um aplicativo de informação em uma ferramenta de gestão de riscos.
+
+---
+
+21. ARQUITETURA DE DADOS
+
+Banco relacional
+
+PostgreSQL
+
+Utilização para:
+
+- Usuários
+- Regiões
+- Eventos
+- Dados estruturados
+- Relacionamentos
+- Informações geográficas
+
+Séries temporais
+
+TimescaleDB
+
+Utilização para:
+
+- Histórico meteorológico
+- Séries de risco
+- Níveis de água
+- Evolução temporal
+- Dados de sensores, quando disponíveis
+
+Banco documental
+
+MongoDB
+
+Utilização possível para:
+
+- Relatos
+- Evidências
+- Estruturas de dados flexíveis
+- Dados não estruturados
+
+---
+
+22. TECNOLOGIAS
+
+Frontend
+
+- React
+- JavaScript/TypeScript
+- Leaflet
+
+Backend
+
+- Node.js
+- Express
+
+Banco de dados
+
+- PostgreSQL
+- TimescaleDB
+- MongoDB
+
+Dados externos
+
+- Open-Meteo
+- Google Weather API
+- Dados geográficos
+- Dados públicos
+
+IA
+
+- Modelos preditivos
+- Processamento estatístico
+- Machine Learning
+
+---
+
+23. MONETIZAÇÃO
+
+Usuário comum
+
+Modelo gratuito com acesso às funções essenciais.
+
+Possível limitação:
+
+- Quantidade de dias monitorados
+- Histórico avançado
+- Recursos premium
+
+Premium
+
+Possíveis recursos:
+
+- Monitoramento ampliado
+- Histórico completo
+- Alertas personalizados avançados
+- Análises adicionais
+
+Institucional / B2G / B2B
+
+Oferta de:
+
+- Painel institucional
+- Monitoramento de regiões
+- Dados históricos
+- Ferramentas de gestão
+- Relatórios
+- Integrações
+- Suporte
+
+A monetização deve ocorrer principalmente sobre serviços e ferramentas avançadas, e não sobre impedir o acesso a alertas de segurança essenciais.
+
+---
+
+24. ESTILO DE ESCRITA E COMUNICAÇÃO
+
+Princípio central
+
+O ARGOS deve falar de forma:
+
+- Direta
+- Clara
+- Objetiva
+- Técnica quando necessário
+- Acessível ao público geral
+- Sem alarmismo
+- Sem prometer certezas
+
+Evitar
+
+❌ "Vai acontecer uma enchente."
+
+❌ "A IA sabe que haverá um desastre."
+
+❌ "Perigo garantido."
+
+Preferir
+
+✅ "Risco estimado de alagamento: alto."
+
+✅ "Probabilidade estimada: 74%."
+
+✅ "A região apresenta condições favoráveis à ocorrência de alagamentos."
+
+✅ "Evite a área durante o período indicado, se possível."
+
+---
+
+25. PRINCÍPIO DE COMUNICAÇÃO
+
+O ARGOS deve seguir:
+
+DADO
+↓
+ANÁLISE
+↓
+EXPLICAÇÃO
+↓
+RISCO
+↓
+RECOMENDAÇÃO
+
+Não simplesmente:
+
+DADO → ALERTA
+
+---
+
+26. ESTABILIDADE — PERGUNTAS E RESPOSTAS
+
+Como o ARGOS funciona quando uma API está indisponível?
+
+O sistema deve possuir mecanismos de fallback e indicar quando determinada informação está indisponível.
+
+O ARGOS não deve inventar dados para preencher uma ausência.
+
+---
+
+O que acontece se os dados estiverem incompletos?
+
+A confiança da análise deve ser reduzida.
+
+O sistema deve diferenciar:
+
+«Risco alto com dados confiáveis»
+
+de:
+
+«Risco alto com baixa confiabilidade dos dados.»
+
+---
+
+O ARGOS depende de uma única fonte?
+
+Não deve depender exclusivamente de uma única fonte quando fontes alternativas estiverem disponíveis.
+
+A combinação de diferentes fontes também pode ser utilizada para aumentar a confiabilidade.
+
+---
+
+Como evitar que um erro de API provoque um alerta falso?
+
+A arquitetura deve possuir:
+
+- Validação dos dados recebidos
+- Verificação de valores anormais
+- Registro de falhas
+- Fallback
+- Indicador de confiança
+- Separação entre dado bruto e resultado processado
+
+---
+
+27. FUNCIONALIDADE — PERGUNTAS E RESPOSTAS
+
+O ARGOS é apenas um aplicativo de previsão do tempo?
+
+Não.
+
+O objetivo é combinar dados meteorológicos, geográficos, históricos e comunitários para estimar riscos e auxiliar decisões.
+
+---
+
+Por que não usar simplesmente um aplicativo de clima?
+
+Aplicativos meteorológicos normalmente respondem:
+
+«"Como estará o tempo?"»
+
+O ARGOS busca responder:
+
+«"Quais riscos essas condições podem representar nesta região e qual ação pode ser mais segura?"»
+
+---
+
+Como o ARGOS sabe que uma região possui maior risco?
+
+A classificação considera múltiplos fatores, como:
+
+- Condições meteorológicas
+- Características geográficas
+- Histórico
+- Exposição
+- Vulnerabilidade
+- Ocorrências observadas
+
+---
+
+O ARGOS garante que um desastre vai acontecer?
+
+Não.
+
+O sistema trabalha com estimativas de probabilidade e risco, não com certeza absoluta.
+
+---
+
+O que diferencia o ARGOS de um mapa comum?
+
+O mapa não serve apenas para exibir informações.
+
+Ele integra:
+
+«dados → análise → risco → evidências → previsão → ação.»
+
+---
+
+28. MONETIZAÇÃO — PERGUNTAS E RESPOSTAS
+
+Como o projeto pode gerar receita?
+
+Por meio de planos premium e principalmente através de soluções institucionais para organizações que precisam monitorar e administrar riscos.
+
+---
+
+Quem pagaria pelo ARGOS?
+
+Possíveis clientes:
+
+- Prefeituras
+- Defesa Civil
+- Empresas
+- Instituições
+- Operadores de infraestrutura
+- Organizações que dependem de deslocamento seguro
+
+---
+
+O usuário precisa pagar para receber um alerta de risco?
+
+Não necessariamente.
+
+Recursos essenciais de segurança devem permanecer acessíveis.
+
+A monetização pode ocorrer por meio de recursos avançados, análises e soluções institucionais.
+
+---
+
+Por que uma prefeitura pagaria?
+
+Porque o ARGOS pode funcionar como uma camada de apoio à decisão, reunindo informações que normalmente estão distribuídas entre diferentes fontes.
+
+---
+
+29. PROVA SOCIAL — PERGUNTAS E RESPOSTAS
+
+Como provar que existe demanda pelo ARGOS?
+
+A demanda deve ser demonstrada por pesquisa e validação com o público-alvo.
+
+Possíveis evidências:
+
+- Questionários
+- Entrevistas
+- Testes do protótipo
+- Feedback dos usuários
+- Relatos de problemas reais
+- Testes com potenciais usuários institucionais
+
+---
+
+Como provar que o problema realmente existe?
+
+Utilizar dados reais de eventos climáticos, registros públicos, notícias, Defesa Civil, relatos da população e dados históricos.
+
+O objetivo é demonstrar:
+
+PROBLEMA EXISTE
+↓
+PESSOAS SÃO AFETADAS
+↓
+SOLUÇÕES ATUAIS POSSUEM LIMITAÇÕES
+↓
+ARGOS ATACA ESSA LACUNA
+
+---
+
+Como provar que as pessoas usariam o sistema?
+
+Não basta perguntar:
+
+«"Você usaria o ARGOS?"»
+
+É melhor testar o protótipo e observar:
+
+- Se o usuário entende o risco
+- Se consegue interpretar o mapa
+- Se consegue encontrar uma rota
+- Se entende os alertas
+- Se considera as informações úteis
+- Se mudaria sua decisão com base nelas
+
+---
+
+Como provar que a IA funciona?
+
+Comparando as previsões com eventos reais.
+
+O projeto deve apresentar métricas de desempenho e exemplos de previsões corretas e incorretas.
+
+---
+
+Como provar que o protótipo funciona?
+
+Demonstrando um fluxo completo:
+
+DADOS REAIS
+↓
+PROCESSAMENTO
+↓
+CÁLCULO DO RISCO
+↓
+MAPA
+↓
+ALERTA
+↓
+RECOMENDAÇÃO
+
+O ideal é demonstrar esse fluxo com um cenário real ou histórico reproduzido.
+
+---
+
+30. CRITÉRIO DE EVOLUÇÃO DO ARGOS
+
+Antes de adicionar qualquer coisa nova, perguntar:
+
+«Isso aumenta a capacidade do ARGOS de detectar, interpretar, explicar, prever ou reduzir riscos?»
+
+Se a resposta for não, provavelmente não é prioridade.
+
+O objetivo não é possuir o maior número de funcionalidades.
+
+O objetivo é construir um sistema no qual cada componente tenha uma função clara:
+
+DADOS
+ ↓
+PROCESSAMENTO
+ ↓
+MODELO
+ ↓
+RISCO
+ ↓
+CONFIANÇA
+ ↓
+EXPLICAÇÃO
+ ↓
+DECISÃO
+ ↓
+AÇÃO
+ ↓
+EVENTO REAL
+ ↓
+VALIDAÇÃO
+ ↓
+APRENDIZADO
+ ↺
+
+---
+
+31. MODO OFFLINE
+
+O ARGOS deve continuar funcional mesmo quando o dispositivo estiver sem conexão com a internet.
+
+O modo offline não tenta reproduzir as funções que dependem de dados em tempo real. Em vez disso, utiliza os dados mais recentemente sincronizados antes da perda de conexão.
+
+Informações disponíveis offline
+
+Últimos registros carregados
+
+O aplicativo mantém localmente os dados obtidos durante a última sincronização, permitindo visualizar:
+
+- Últimos níveis de risco registrados
+- Últimos eventos identificados
+- Últimas ocorrências da comunidade
+- Últimos dados meteorológicos disponíveis
+- Últimas informações carregadas no mapa
+
+Esses dados devem apresentar claramente o horário da última atualização.
+
+Exemplo:
+
+⚠️ MODO OFFLINE
+
+Última atualização:
+12/08/2026 — 14:32
+
+Os dados exibidos podem estar desatualizados.
+
+---
+
+Abrigos e pontos de proteção
+
+Os locais de abrigo e pontos de proteção devem permanecer disponíveis mesmo sem conexão.
+
+O mapa offline deve permitir visualizar, quando os dados estiverem previamente armazenados:
+
+- Abrigos
+- Escolas utilizadas como pontos de apoio
+- Hospitais
+- Postos de saúde
+- Outros pontos de proteção cadastrados
+
+O usuário pode consultar esses locais mesmo sem acesso à internet.
+
+---
+
+Limitações do modo offline
+
+O ARGOS não deve fingir que possui informações em tempo real quando estiver desconectado.
+
+Enquanto offline, ficam indisponíveis ou limitadas funções que dependem de comunicação externa, como:
+
+- Atualização meteorológica em tempo real
+- Novos relatos da comunidade
+- Sincronização de ocorrências
+- Atualização do nível dos rios
+- Novos alertas externos
+- Cálculos que dependam de dados que ainda não foram armazenados
+- Atualização das previsões
+
+---
+
+Sincronização
+
+Quando a conexão for restabelecida:
+
+SEM INTERNET
+     ↓
+DADOS LOCAIS
+     ↓
+USUÁRIO CONTINUA CONSULTANDO
+     ↓
+CONEXÃO RESTABELECIDA
+     ↓
+SINCRONIZAÇÃO
+     ↓
+DADOS ATUALIZADOS
+
+Os dados armazenados localmente devem ser atualizados quando uma nova sincronização estiver disponível.
+
+---
+
+Princípio de segurança
+
+O modo offline deve deixar explícita a diferença entre:
+
+«informação disponível»
+
+e
+
+«informação atualizada.»
+
+O objetivo não é fazer o usuário acreditar que o ARGOS continua recebendo dados em tempo real.
+
+O objetivo é garantir que, durante uma perda de conexão, ele ainda tenha acesso às últimas informações conhecidas e aos locais de proteção, enquanto recebe um aviso claro sobre a possibilidade de desatualização.
+
+
+O ARGOS funciona sem internet?
+
+Sim, porém de forma limitada.
+Quando não há conexão, o aplicativo utiliza os dados armazenados durante a última sincronização. O usuário ainda pode consultar os últimos registros carregados e os locais de abrigo disponíveis no mapa.
+Informações que dependem de dados em tempo real não são atualizadas enquanto o dispositivo estiver offline.
+
+O aplicativo deve indicar claramente a data e hora da última atualização, evitando que dados antigos sejam interpretados como informações atuais.
+
+Quando a conexão retornar, o ARGOS realiza uma nova sincronização e atualiza os dados disponíveis.
+
+32. OBJETIVO FINAL
+um sistema capaz de transformar dados ambientais, geográficos e comunitários em estimativas explicáveis de risco e informações práticas para prevenção e tomada de decisão.
+A prioridade de desenvolvimento deve ser profundidade, integração, validação e confiabilidade, e não simplesmente aumento do número de funcionalidades.
