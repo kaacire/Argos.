@@ -1,0 +1,35 @@
+// ARGOS - Backend (Primeira Etapa: Mapa)
+// Schema mínimo necessário para persistir dados meteorológicos reais
+// obtidos da Open-Meteo e servidos ao MapPage.tsx.
+//
+// Somente a tabela realmente usada nesta etapa (WeatherData) existe aqui.
+// Nenhuma tabela para IA, relatos ou histórico completo foi criada -
+// essas funcionalidades ainda não foram implementadas (ver README, seção 2).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Registro normalizado de uma consulta à Open-Meteo para um ponto (lat/lng).
+// Cada linha é uma "foto" do clima naquele momento - serve tanto como
+// persistência real quanto como cache de curta duração (ver weatherService.ts).
+model WeatherData {
+  id          String   @id @default(cuid())
+  latitude    Float
+  longitude   Float
+  temperature Float
+  condition   String
+  humidity    Float
+  windSpeed   Float
+  city        String
+  state       String
+  source      String   @default("open-meteo")
+  fetchedAt   DateTime @default(now())
+
+  @@index([latitude, longitude, fetchedAt])
+}

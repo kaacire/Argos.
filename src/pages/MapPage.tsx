@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { SENTO_SE_COORDS, mapLayers, mapMarkers, mapOccurrences, mapShelters, riskZones } from '../data/mockData'
+import { fetchRealWeather, type MapApiState, type RealWeatherData } from '../data/mapApi'
 import { riskZoneConfig } from '../utils/riskColors'
 import 'leaflet/dist/leaflet.css'
 
@@ -54,6 +55,33 @@ function MapResizeHandler({ trigger }: { trigger: boolean }) {
 export default function MapPage() {
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['zonas', 'relatos', 'abrigos']))
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Camadas de temperatura e ventania passam a vir de dados reais
+  // (Open-Meteo, via backend ARGOS). As demais camadas do mapa continuam
+  // vindo de mockData.ts - ver src/data/mapApi.ts para o motivo.
+  const [weatherState, setWeatherState] = useState<MapApiState<RealWeatherData>>({ status: 'loading' })
+
+  useEffect(() => {
+    let cancelled = false
+    setWeatherState({ status: 'loading' })
+
+    fetchRealWeather()
+      .then((data) => {
+        if (!cancelled) setWeatherState({ status: 'success', data })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setWeatherState({
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Não foi possível carregar os dados do clima.',
+          })
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const toggleLayer = (id: string) => {
     setActiveLayers((prev) => {
@@ -121,6 +149,17 @@ export default function MapPage() {
             </button>
           )}
 
+          {(activeLayers.has('temperatura') || activeLayers.has('ventania')) && weatherState.status !== 'success' && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
+              {weatherState.status === 'loading' && (
+                <span className="text-slate-600">Carregando dados reais do clima (Open-Meteo)...</span>
+              )}
+              {weatherState.status === 'error' && (
+                <span className="text-red-600">Erro ao carregar clima: {weatherState.message}</span>
+              )}
+            </div>
+          )}
+
           <MapContainer center={SENTO_SE_COORDS} zoom={14} scrollWheelZoom={isFullscreen} style={{ height: '100%', width: '100%' }}>
             <MapResizeHandler trigger={isFullscreen} />
             <TileLayer
@@ -180,13 +219,18 @@ export default function MapPage() {
                   fillOpacity: 0.15,
                 }}
               >
-                <Popup>Temperatura: 28°C</Popup>
+                <Popup>
+                  {weatherState.status === 'loading' && 'Carregando temperatura...'}
+                  {weatherState.status === 'error' && 'Erro ao carregar temperatura.'}
+                  {weatherState.status === 'success' &&
+                    `Temperatura: ${weatherState.data.temperature}°C (Open-Meteo${weatherState.data.cached ? ', em cache' : ''})`}
+                </Popup>
               </CircleMarker>
             )}
 
             {activeLayers.has('ventania') && (
               <CircleMarker
-                center={[-9.744, -42.257]}
+                center={SENTO_SE_COORDS}
                 radius={25}
                 pathOptions={{
                   color: '#8b5cf6',
@@ -194,7 +238,12 @@ export default function MapPage() {
                   fillOpacity: 0.2,
                 }}
               >
-                <Popup>Ventania: até 45 km/h</Popup>
+                <Popup>
+                  {weatherState.status === 'loading' && 'Carregando vento...'}
+                  {weatherState.status === 'error' && 'Erro ao carregar vento.'}
+                  {weatherState.status === 'success' &&
+                    `Vento atual: ${weatherState.data.windSpeed} km/h (Open-Meteo${weatherState.data.cached ? ', em cache' : ''})`}
+                </Popup>
               </CircleMarker>
             )}
 
