@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { SENTO_SE_COORDS, mapLayers, mapMarkers, mapOccurrences, mapShelters, riskZones } from '../data/mockData'
-import { fetchRealWeather, type MapApiState, type RealWeatherData } from '../data/mapApi'
+import { fetchRealWeather, fetchRealRainLayer, type MapApiState, type RealWeatherData, type RealRainPoint } from '../data/mapApi'
 import { riskZoneConfig } from '../utils/riskColors'
 import 'leaflet/dist/leaflet.css'
 
@@ -61,6 +61,10 @@ export default function MapPage() {
   // vindo de mockData.ts - ver src/data/mapApi.ts para o motivo.
   const [weatherState, setWeatherState] = useState<MapApiState<RealWeatherData>>({ status: 'loading' })
 
+  // Camada "Chuva": precipitação real da Open-Meteo para 3 pontos fixos
+  // (GET /api/rain no backend). Ver src/data/mapApi.ts.
+  const [rainState, setRainState] = useState<MapApiState<RealRainPoint[]>>({ status: 'loading' })
+
   useEffect(() => {
     let cancelled = false
     setWeatherState({ status: 'loading' })
@@ -74,6 +78,28 @@ export default function MapPage() {
           setWeatherState({
             status: 'error',
             message: err instanceof Error ? err.message : 'Não foi possível carregar os dados do clima.',
+          })
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setRainState({ status: 'loading' })
+
+    fetchRealRainLayer()
+      .then((points) => {
+        if (!cancelled) setRainState({ status: 'success', data: points })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setRainState({
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Não foi possível carregar a camada de chuva.',
           })
         }
       })
@@ -160,6 +186,17 @@ export default function MapPage() {
             </div>
           )}
 
+          {activeLayers.has('chuva') && rainState.status !== 'success' && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
+              {rainState.status === 'loading' && (
+                <span className="text-slate-600">Carregando dados reais de chuva (Open-Meteo)...</span>
+              )}
+              {rainState.status === 'error' && (
+                <span className="text-red-600">Erro ao carregar chuva: {rainState.message}</span>
+              )}
+            </div>
+          )}
+
           <MapContainer center={SENTO_SE_COORDS} zoom={14} scrollWheelZoom={isFullscreen} style={{ height: '100%', width: '100%' }}>
             <MapResizeHandler trigger={isFullscreen} />
             <TileLayer
@@ -194,20 +231,46 @@ export default function MapPage() {
               })}
 
             {activeLayers.has('chuva') &&
-              mapMarkers.chuva.map((m, i) => (
-                <CircleMarker
-                  key={`chuva-${i}`}
-                  center={[m.lat, m.lng]}
-                  radius={m.intensity === 'alta' ? 18 : m.intensity === 'média' ? 12 : 8}
-                  pathOptions={{
-                    color: '#3b82f6',
-                    fillColor: '#3b82f6',
-                    fillOpacity: 0.4,
-                  }}
-                >
-                  <Popup>Chuva: intensidade {m.intensity}</Popup>
-                </CircleMarker>
-              ))}
+              rainState.status === 'success' &&
+              rainState.data.map((point, i) => {
+                if ('error' in point) {
+                  return (
+                    <CircleMarker
+                      key={`chuva-${i}`}
+                      center={[point.lat, point.lng]}
+                      radius={6}
+                      pathOptions={{ color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.4 }}
+                    >
+                      <Popup>Sem dado de chuva disponível para este ponto no momento.</Popup>
+                    </CircleMarker>
+                  )
+                }
+                // Raio proporcional à precipitação real (mm), limitado a uma faixa visível no mapa.
+                const radius = Math.max(8, Math.min(30, 8 + point.precipitation * 3))
+                return (
+                  <CircleMarker
+                    key={`chuva-${i}`}
+                    center={[point.lat, point.lng]}
+                    radius={radius}
+                    pathOptions={{
+                      color: '#3b82f6',
+                      fillColor: '#3b82f6',
+                      fillOpacity: 0.4,
+                    }}
+                  >
+                    <Popup>
+                      <div className="space-y-1 text-sm">
+                        <div className="font-semibold">Precipitação: {point.precipitation} mm</div>
+                        <div>{point.condition}</div>
+                        <div className="text-xs text-gray-500">
+                          Open-Meteo{point.cached ? ', em cache' : ''} — atualizado em{' '}
+                          {new Date(point.lastUpdate).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                )
+              })}
 
             {activeLayers.has('temperatura') && (
               <CircleMarker

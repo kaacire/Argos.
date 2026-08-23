@@ -283,11 +283,9 @@ export const mapShelters: MapShelter[] = [
 ]
 
 export const mapMarkers = {
-  chuva: [
-    { lat: -9.741, lng: -42.254, intensity: 'alta' },
-    { lat: -9.746, lng: -42.258, intensity: 'média' },
-    { lat: -9.738, lng: -42.261, intensity: 'baixa' },
-  ],
+  // "chuva" removido daqui: a camada Chuva agora usa dados reais da
+  // Open-Meteo via GET /api/rain (backend/src/routes/rain.ts), com as
+  // mesmas 3 coordenadas que estavam aqui. Ver src/data/mapApi.ts.
   alagamentos: [
     { lat: -9.742, lng: -42.255, name: 'Rua da Matriz' },
     { lat: -9.745, lng: -42.259, name: 'Av. Principal' },

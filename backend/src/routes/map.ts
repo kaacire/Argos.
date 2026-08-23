@@ -9,10 +9,14 @@ import { SENTO_SE_COORDS } from '../config.js'
 // integrada nesta etapa: o clima atual (temperatura, vento, condição) no
 // ponto de Sento Sé, vindo da Open-Meteo via weatherService.
 //
-// As demais camadas do mapa (zonas de risco, ocorrências, abrigos, chuva
-// espacial, rios) NÃO têm fonte real integrada ainda e continuam vindo do
-// mockData.ts diretamente no frontend - este endpoint não as retorna, para
-// não fingir que são dados reais. Ver README, seção "Frontend".
+// A camada "Chuva" também já tem fonte real, mas por endpoint próprio
+// (GET /api/rain, routes/rain.ts) - não está incluída aqui para não
+// duplicar chamadas à Open-Meteo/Postgres.
+//
+// As demais camadas do mapa (zonas de risco, ocorrências, abrigos, rios,
+// alagamentos, deslizamentos) NÃO têm fonte real integrada ainda e
+// continuam vindo do mockData.ts diretamente no frontend - este endpoint
+// não as retorna, para não fingir que são dados reais.
 export async function handleMap(res: ServerResponse) {
   const [lat, lng] = SENTO_SE_COORDS
 
@@ -21,8 +25,8 @@ export async function handleMap(res: ServerResponse) {
     sendJson(res, 200, {
       coords: SENTO_SE_COORDS,
       weather,
-      realLayers: ['temperatura', 'ventania'],
-      mockLayers: ['zonas', 'chuva', 'alagamentos', 'deslizamentos', 'relatos', 'abrigos', 'rios'],
+      realLayers: ['temperatura', 'ventania', 'chuva'],
+      mockLayers: ['zonas', 'alagamentos', 'deslizamentos', 'relatos', 'abrigos', 'rios'],
     })
   } catch (err) {
     const { status, message } = errorToStatus(err)

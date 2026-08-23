@@ -41,3 +41,23 @@ model WeatherData {
 
   @@index([latitude, longitude, fetchedAt])
 }
+
+// Cache de resultados já agregados da página Histórico (7d/3m/1y), vindos da
+// Historical Weather API da Open-Meteo (ver services/history/). Uma linha
+// por combinação (latitude, longitude, period) - o registro é sobrescrito
+// (upsert) quando expira, em vez de acumular um log como WeatherData,
+// porque aqui só precisamos do resultado mais recente da janela deslizante
+// de cada período, não de um histórico de "quando foi consultado".
+model WeatherHistoryCache {
+  id        String   @id @default(cuid())
+  latitude  Float
+  longitude Float
+  // '7d' | '3m' | '1y'
+  period    String
+  // HistoryPoint[] normalizado (ver backend/src/types.ts)
+  points    Json
+  source    String   @default("open-meteo")
+  fetchedAt DateTime @default(now())
+
+  @@unique([latitude, longitude, period])
+}

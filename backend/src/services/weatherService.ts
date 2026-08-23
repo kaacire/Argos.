@@ -68,7 +68,7 @@ function describeWeatherCode(code: number | undefined): string {
   return WEATHER_CODE_LABELS[code] ?? `Condição não mapeada (código ${code})`
 }
 
-function validateCoords(lat: number, lng: number) {
+export function validateCoords(lat: number, lng: number) {
   if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     throw new InvalidCoordinatesError(`Coordenadas inválidas: lat=${lat}, lng=${lng}`)
   }

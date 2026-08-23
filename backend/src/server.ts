@@ -4,6 +4,8 @@ import { applyCors, sendJson } from './lib/http.js'
 import { handleHealth } from './routes/health.js'
 import { handleWeather } from './routes/weather.js'
 import { handleMap } from './routes/map.js'
+import { handleRain } from './routes/rain.js'
+import { handleHistory } from './routes/history.js'
 
 // Servidor HTTP nativo (sem Express), seguindo a mesma abordagem de
 // "módulos nativos" já usada em versões anteriores do backend ARGOS.
@@ -34,6 +36,16 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/rain') {
+      await handleRain(res)
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/history') {
+      await handleHistory(res, url.searchParams)
+      return
+    }
+
     sendJson(res, 404, { error: `Rota não encontrada: ${req.method} ${url.pathname}` })
   } catch (err) {
     sendJson(res, 500, { error: 'Erro interno do servidor.' })
@@ -43,5 +55,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[argos-backend] escutando em http://localhost:${PORT}`)
-  console.log(`[argos-backend] endpoints: GET /api/health, GET /api/weather, GET /api/map`)
+  console.log(`[argos-backend] endpoints: GET /api/health, GET /api/weather, GET /api/map, GET /api/rain, GET /api/history`)
 })

@@ -27,6 +27,8 @@ export function errorToStatus(err: unknown): { status: number; message: string }
   switch (name) {
     case 'InvalidCoordinatesError':
       return { status: 400, message }
+    case 'InvalidParameterError':
+      return { status: 400, message }
     case 'UpstreamUnavailableError':
       return { status: 502, message }
     case 'NotImplementedError':
