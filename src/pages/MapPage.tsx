@@ -65,7 +65,7 @@ export default function MapPage() {
     let cancelled = false
     setWeatherState({ status: 'loading' })
 
-    fetchRealWeather()
+    fetchRealWeather(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
       .then((data) => {
         if (!cancelled) setWeatherState({ status: 'success', data })
       })
@@ -222,8 +222,33 @@ export default function MapPage() {
                 <Popup>
                   {weatherState.status === 'loading' && 'Carregando temperatura...'}
                   {weatherState.status === 'error' && 'Erro ao carregar temperatura.'}
-                  {weatherState.status === 'success' &&
-                    `Temperatura: ${weatherState.data.temperature}°C (Open-Meteo${weatherState.data.cached ? ', em cache' : ''})`}
+                  {weatherState.status === 'success' && (
+                    <div className="space-y-1 text-sm">
+                      <div className="font-semibold">
+                        {weatherState.data.temperature}°C — {weatherState.data.condition}
+                      </div>
+                      <div>Umidade: {weatherState.data.humidity >= 0 ? `${weatherState.data.humidity}%` : 'indisponível'}</div>
+                      <div>
+                        Precipitação atual:{' '}
+                        {weatherState.data.precipitation >= 0 ? `${weatherState.data.precipitation} mm` : 'indisponível'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Open-Meteo{weatherState.data.cached ? ', em cache' : ''} — atualizado em{' '}
+                        {new Date(weatherState.data.lastUpdate).toLocaleString('pt-BR')}
+                      </div>
+                      {weatherState.data.forecast.length > 0 && (
+                        <div className="mt-2 border-t pt-1">
+                          <div className="text-xs font-semibold">Previsão (Open-Meteo)</div>
+                          {weatherState.data.forecast.slice(0, 5).map((day) => (
+                            <div key={day.date} className="text-xs">
+                              {new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                              : {day.temperatureMin}°–{day.temperatureMax}°C, chuva {day.precipitationSum}mm ({day.condition})
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </Popup>
               </CircleMarker>
             )}
@@ -242,7 +267,7 @@ export default function MapPage() {
                   {weatherState.status === 'loading' && 'Carregando vento...'}
                   {weatherState.status === 'error' && 'Erro ao carregar vento.'}
                   {weatherState.status === 'success' &&
-                    `Vento atual: ${weatherState.data.windSpeed} km/h (Open-Meteo${weatherState.data.cached ? ', em cache' : ''})`}
+                    `Vento atual: ${weatherState.data.windSpeed} km/h (Open-Meteo${weatherState.data.cached ? ', em cache' : ''}, ${new Date(weatherState.data.lastUpdate).toLocaleTimeString('pt-BR')})`}
                 </Popup>
               </CircleMarker>
             )}

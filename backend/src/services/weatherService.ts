@@ -1,6 +1,6 @@
 import { prisma } from '../db.js'
 import { OPEN_METEO_BASE_URL, SENTO_SE_CITY, SENTO_SE_STATE, WEATHER_CACHE_MINUTES } from '../config.js'
-import { ArgosWeatherModel, InvalidCoordinatesError, UpstreamUnavailableError } from '../types.js'
+import { ArgosWeatherModel, ForecastDay, InvalidCoordinatesError, UpstreamUnavailableError } from '../types.js'
 
 // -----------------------------------------------------------------------
 // FLUXO (ver README, seção "Arquitetura"):
@@ -21,6 +21,7 @@ interface OpenMeteoResponse {
   current?: {
     temperature_2m?: number
     relative_humidity_2m?: number
+    precipitation?: number
     wind_speed_10m?: number
     weather_code?: number
     time?: string
@@ -30,6 +31,13 @@ interface OpenMeteoResponse {
     windspeed?: number
     weathercode?: number
     time?: string
+  }
+  daily?: {
+    time?: string[]
+    weather_code?: number[]
+    temperature_2m_max?: number[]
+    temperature_2m_min?: number[]
+    precipitation_sum?: number[]
   }
 }
 
@@ -73,7 +81,15 @@ async function fetchFromOpenMeteo(lat: number, lng: number): Promise<OpenMeteoRe
   const url = new URL(OPEN_METEO_BASE_URL)
   url.searchParams.set('latitude', String(lat))
   url.searchParams.set('longitude', String(lng))
-  url.searchParams.set('current', 'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code')
+  url.searchParams.set(
+    'current',
+    'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code'
+  )
+  url.searchParams.set(
+    'daily',
+    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum'
+  )
+  url.searchParams.set('forecast_days', '5')
   url.searchParams.set('timezone', 'auto')
 
   const controller = new AbortController()
@@ -101,7 +117,41 @@ async function fetchFromOpenMeteo(lat: number, lng: number): Promise<OpenMeteoRe
   return data
 }
 
-function normalizeOpenMeteo(raw: OpenMeteoResponse): Omit<ArgosWeatherModel, 'cached'> {
+// Normaliza o bloco `daily` da Open-Meteo em ForecastDay[]. Os 4 arrays
+// (time, weather_code, temperature_2m_max, temperature_2m_min,
+// precipitation_sum) vêm sempre com o mesmo tamanho e alinhados por índice
+// - se algum vier ausente/curto, o dia é descartado em vez de inventado.
+function normalizeForecast(daily: OpenMeteoResponse['daily']): ForecastDay[] {
+  if (!daily?.time) return []
+
+  const days: ForecastDay[] = []
+  for (let i = 0; i < daily.time.length; i++) {
+    const date = daily.time[i]
+    const tempMax = daily.temperature_2m_max?.[i]
+    const tempMin = daily.temperature_2m_min?.[i]
+    const precipitationSum = daily.precipitation_sum?.[i]
+    const code = daily.weather_code?.[i]
+
+    if (date === undefined || tempMax === undefined || tempMin === undefined || precipitationSum === undefined) {
+      continue
+    }
+
+    days.push({
+      date,
+      condition: describeWeatherCode(code),
+      temperatureMax: tempMax,
+      temperatureMin: tempMin,
+      precipitationSum,
+    })
+  }
+  return days
+}
+
+function normalizeOpenMeteo(
+  raw: OpenMeteoResponse,
+  requestedLat: number,
+  requestedLng: number
+): Omit<ArgosWeatherModel, 'cached'> {
   const current = raw.current
   const legacy = raw.current_weather
 
@@ -109,21 +159,29 @@ function normalizeOpenMeteo(raw: OpenMeteoResponse): Omit<ArgosWeatherModel, 'ca
   const windSpeed = current?.wind_speed_10m ?? legacy?.windspeed
   const weatherCode = current?.weather_code ?? legacy?.weathercode
   const humidity = current?.relative_humidity_2m
+  const precipitation = current?.precipitation
 
   if (temperature === undefined || windSpeed === undefined) {
     throw new UpstreamUnavailableError('Open-Meteo não retornou temperatura e/ou vento para este ponto.')
   }
 
   return {
+    // Coordenadas efetivamente consultadas (não as do grid-cell que a
+    // Open-Meteo pode retornar levemente deslocado - ver docs da API).
+    latitude: requestedLat,
+    longitude: requestedLng,
     temperature,
     windSpeed,
-    // A Open-Meteo não retorna umidade no endpoint "current_weather" legado;
-    // quando indisponível, documentamos isso explicitamente em vez de inventar.
+    // A Open-Meteo não retorna umidade/precipitação no endpoint
+    // "current_weather" legado; quando indisponível, documentamos isso
+    // explicitamente em vez de inventar um valor.
     humidity: humidity ?? -1,
+    precipitation: precipitation ?? -1,
+    forecast: normalizeForecast(raw.daily),
     condition: describeWeatherCode(weatherCode),
     city: SENTO_SE_CITY,
     state: SENTO_SE_STATE,
-    lastUpdate: new Date().toISOString(),
+    lastUpdate: current?.time ?? legacy?.time ?? new Date().toISOString(),
     source: 'open-meteo',
   }
 }
@@ -149,10 +207,14 @@ export async function getWeatherForCoords(lat: number, lng: number): Promise<Arg
 
   if (cached) {
     return {
+      latitude: cached.latitude,
+      longitude: cached.longitude,
       temperature: cached.temperature,
       condition: cached.condition,
       humidity: cached.humidity,
       windSpeed: cached.windSpeed,
+      precipitation: cached.precipitation,
+      forecast: (cached.forecast as unknown as ForecastDay[] | null) ?? [],
       city: cached.city,
       state: cached.state,
       lastUpdate: cached.fetchedAt.toISOString(),
@@ -162,7 +224,7 @@ export async function getWeatherForCoords(lat: number, lng: number): Promise<Arg
   }
 
   const raw = await fetchFromOpenMeteo(lat, lng)
-  const normalized = normalizeOpenMeteo(raw)
+  const normalized = normalizeOpenMeteo(raw, lat, lng)
 
   await prisma.weatherData.create({
     data: {
@@ -172,6 +234,9 @@ export async function getWeatherForCoords(lat: number, lng: number): Promise<Arg
       condition: normalized.condition,
       humidity: normalized.humidity,
       windSpeed: normalized.windSpeed,
+      precipitation: normalized.precipitation,
+      // Prisma serializa objetos JS em JSONB automaticamente para colunas Json.
+      forecast: normalized.forecast as unknown as object,
       city: normalized.city,
       state: normalized.state,
       source: normalized.source,

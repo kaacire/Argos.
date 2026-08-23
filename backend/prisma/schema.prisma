@@ -19,17 +19,25 @@ datasource db {
 // Cada linha é uma "foto" do clima naquele momento - serve tanto como
 // persistência real quanto como cache de curta duração (ver weatherService.ts).
 model WeatherData {
-  id          String   @id @default(cuid())
-  latitude    Float
-  longitude   Float
-  temperature Float
-  condition   String
-  humidity    Float
-  windSpeed   Float
-  city        String
-  state       String
-  source      String   @default("open-meteo")
-  fetchedAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  latitude      Float
+  longitude     Float
+  temperature   Float
+  condition     String
+  humidity      Float
+  windSpeed     Float
+  // Precipitação atual (mm), variável real da Open-Meteo (&current=precipitation).
+  precipitation Float    @default(0)
+  // Previsão diária (próximos dias) no momento da consulta, normalizada em
+  // ForecastDay[] (ver types.ts). Guardada como snapshot em JSON porque é
+  // uma lista de tamanho variável, não uma métrica escalar como as demais
+  // colunas - e porque a previsão muda a cada nova consulta à Open-Meteo,
+  // então não faz sentido normalizá-la em outra tabela relacional agora.
+  forecast      Json?
+  city          String
+  state         String
+  source        String   @default("open-meteo")
+  fetchedAt     DateTime @default(now())
 
   @@index([latitude, longitude, fetchedAt])
 }

@@ -4,13 +4,26 @@
 // não têm uma fonte de dados real integrada - isso é intencional e está
 // documentado no README do projeto.
 
+// Um dia de previsão (backend/src/types.ts -> ForecastDay).
+export interface RealForecastDay {
+  date: string
+  condition: string
+  temperatureMax: number
+  temperatureMin: number
+  precipitationSum: number
+}
+
 // Mesmo formato retornado por GET /api/weather no backend
 // (backend/src/types.ts -> ArgosWeatherModel).
 export interface RealWeatherData {
+  latitude: number
+  longitude: number
   temperature: number
   condition: string
   humidity: number
   windSpeed: number
+  precipitation: number
+  forecast: RealForecastDay[]
   city: string
   state: string
   lastUpdate: string
@@ -23,8 +36,9 @@ export type MapApiState<T> =
   | { status: 'success'; data: T }
   | { status: 'error'; message: string }
 
-export async function fetchRealWeather(): Promise<RealWeatherData> {
-  const response = await fetch('/api/weather')
+export async function fetchRealWeather(lat: number, lng: number): Promise<RealWeatherData> {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng) })
+  const response = await fetch(`/api/weather?${params.toString()}`)
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)
