@@ -36,6 +36,14 @@ function toIsoDate(d: Date): string {
 // Janela de datas por período. Termina em "ontem" (não hoje) porque o dia
 // corrente ainda está em andamento e não tem dado diário completo/estável
 // na fonte - evita misturar um dia parcial com dias completos no gráfico.
+//
+// Para 1y, o início é calculado por ARITMÉTICA DE MÊS (12 meses antes de
+// "ontem", +1 dia) em vez de "-364 dias" fixo. Isso alinha exatamente com
+// os 12 baldes mensais de bucketByRelativeMonth() abaixo (mesma fronteira
+// nos dois lugares), então nenhum dia buscado fica de fora do balde certo
+// e nenhum balde fica parcial. Na prática o intervalo continua ~365 dias
+// (364-366, dependendo dos meses cruzados) - a mesma janela de "último
+// ano", só que com o corte exatamente onde a agregação mensal também corta.
 function computeDateRange(period: HistoryPeriod): { startDate: string; endDate: string } {
   const end = new Date()
   end.setUTCDate(end.getUTCDate() - 1)
@@ -43,7 +51,10 @@ function computeDateRange(period: HistoryPeriod): { startDate: string; endDate: 
   const start = new Date(end)
   if (period === '7d') start.setUTCDate(start.getUTCDate() - 6)
   else if (period === '3m') start.setUTCDate(start.getUTCDate() - 89)
-  else start.setUTCDate(start.getUTCDate() - 364)
+  else {
+    start.setUTCMonth(start.getUTCMonth() - 12)
+    start.setUTCDate(start.getUTCDate() + 1)
+  }
 
   return { startDate: toIsoDate(start), endDate: toIsoDate(end) }
 }
@@ -79,27 +90,45 @@ function bucketByDays(points: HistoryPoint[], daysPerBucket: number): HistoryPoi
   return buckets
 }
 
-// Agrupa pontos diários por mês-calendário (usado para 1 ano: ~12 pontos).
-function bucketByMonth(points: HistoryPoint[]): HistoryPoint[] {
-  const byMonth = new Map<string, HistoryPoint[]>()
-  for (const p of points) {
-    const monthKey = p.date.slice(0, 7) // yyyy-mm
-    const list = byMonth.get(monthKey) ?? []
-    list.push(p)
-    byMonth.set(monthKey, list)
+// Calcula as fronteiras dos 12 "meses relativos" que terminam exatamente em
+// endDate: bucket mais recente = (endDate - 1 mês + 1 dia) até endDate;
+// o anterior = mais um mês para trás; e assim por diante. Contíguos, sem
+// sobreposição, sempre exatamente 12 - nunca dependem de onde o mês
+// civil começa, então nunca duplicam um mês por causa da virada de ano.
+function relativeMonthBounds(endDateStr: string): { start: string; end: string }[] {
+  const bounds: { start: string; end: string }[] = []
+  let cursorEnd = new Date(`${endDateStr}T00:00:00Z`)
+
+  for (let i = 0; i < 12; i++) {
+    const cursorStart = new Date(cursorEnd)
+    cursorStart.setUTCMonth(cursorStart.getUTCMonth() - 1)
+    cursorStart.setUTCDate(cursorStart.getUTCDate() + 1)
+
+    bounds.unshift({ start: toIsoDate(cursorStart), end: toIsoDate(cursorEnd) })
+
+    cursorEnd = new Date(cursorStart)
+    cursorEnd.setUTCDate(cursorEnd.getUTCDate() - 1)
   }
 
-  const result: HistoryPoint[] = []
-  for (const [monthKey, chunk] of byMonth) {
-    result.push({
-      date: `${monthKey}-01`,
+  return bounds
+}
+
+// Agrupa pontos diários em exatamente 12 baldes "mensais" relativos a
+// endDate (ver relativeMonthBounds) - usado para 1 ano. Cada balde vira um
+// ponto no gráfico rotulado com sua data de início.
+function bucketByRelativeMonth(points: HistoryPoint[], endDate: string): HistoryPoint[] {
+  const bounds = relativeMonthBounds(endDate)
+
+  return bounds.map(({ start, end }) => {
+    const chunk = points.filter((p) => p.date >= start && p.date <= end)
+    return {
+      date: start,
       temperature: average(chunk.map((p) => p.temperature)),
       precipitation: sum(chunk.map((p) => p.precipitation)),
       humidity: average(chunk.map((p) => p.humidity)),
       windSpeed: average(chunk.map((p) => p.windSpeed)),
-    })
-  }
-  return result.sort((a, b) => a.date.localeCompare(b.date))
+    }
+  })
 }
 
 function aggregationLabelForPeriod(period: HistoryPeriod): HistoryAggregation {
@@ -108,10 +137,14 @@ function aggregationLabelForPeriod(period: HistoryPeriod): HistoryAggregation {
   return 'monthly'
 }
 
-function aggregateForPeriod(period: HistoryPeriod, daily: HistoryPoint[]): { aggregation: HistoryAggregation; points: HistoryPoint[] } {
+function aggregateForPeriod(
+  period: HistoryPeriod,
+  daily: HistoryPoint[],
+  endDate: string
+): { aggregation: HistoryAggregation; points: HistoryPoint[] } {
   if (period === '7d') return { aggregation: 'daily', points: daily }
   if (period === '3m') return { aggregation: 'weekly', points: bucketByDays(daily, 7) }
-  return { aggregation: 'monthly', points: bucketByMonth(daily) }
+  return { aggregation: 'monthly', points: bucketByRelativeMonth(daily, endDate) }
 }
 
 export async function getWeatherHistory(lat: number, lng: number, period: HistoryPeriod): Promise<WeatherHistoryResponse> {
@@ -135,7 +168,7 @@ export async function getWeatherHistory(lat: number, lng: number, period: Histor
 
   const { startDate, endDate } = computeDateRange(period)
   const daily = await historySource.fetchDailyHistory(lat, lng, startDate, endDate)
-  const { aggregation, points } = aggregateForPeriod(period, daily)
+  const { aggregation, points } = aggregateForPeriod(period, daily, endDate)
 
   await prisma.weatherHistoryCache.upsert({
     where: { latitude_longitude_period: { latitude: lat, longitude: lng, period } },
