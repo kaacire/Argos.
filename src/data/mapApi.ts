@@ -1,8 +1,5 @@
-// Camada de acesso ao backend ARGOS, usada SOMENTE pelo MapPage.tsx nesta
-// etapa. As camadas de zonas de risco, ocorrências, abrigos e rios
-// continuam vindo de src/data/mockData.ts, pois ainda não têm uma fonte de
-// dados real integrada - isso é intencional e está documentado no README
-// do projeto. Temperatura, Ventania e Chuva já usam dados reais.
+// Camada de acesso ao backend ARGOS usada pelo MapPage.tsx.
+// As camadas ainda não integradas permanecem em mockData.ts.
 
 // Um dia de previsão (backend/src/types.ts -> ForecastDay).
 export interface RealForecastDay {
@@ -65,4 +62,37 @@ export async function fetchRealRainLayer(): Promise<RealRainPoint[]> {
 
   const body: { points: RealRainPoint[] } = await response.json()
   return body.points
+}
+
+export interface RealRiver {
+  station: string
+  latitude?: number
+  longitude?: number
+  level: number
+  unit: string
+  timestamp: string
+  source: string
+  cached: boolean
+}
+
+export interface RiverApiResponse {
+  status: 'current' | 'cached' | 'no-data'
+  data: RealRiver | null
+  reason?: string
+}
+
+export async function fetchRealRivers(lat: number, lng: number): Promise<RiverApiResponse> {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng) })
+  const response = await fetch(`/api/rivers?${params.toString()}`)
+  const body: unknown = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+      ? body.error
+      : `Backend respondeu com status ${response.status}`
+    throw new Error(message)
+  }
+  if (!body || typeof body !== 'object' || !('status' in body)) {
+    throw new Error('Resposta inválida do backend de rios.')
+  }
+  return body as RiverApiResponse
 }

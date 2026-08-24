@@ -44,6 +44,33 @@ function toSeries(
   return history.points.map((p) => ({ label: formatLabel(p.date, history.period), value: p[field] }))
 }
 
+// -----------------------------------------------------------------------
+// Estatísticas (máxima, mínima, média) do período. Calculadas SOMENTE a
+// partir dos pontos reais já retornados por /api/history (a mesma série
+// usada nos gráficos) - nunca de um valor fixo/mock. Campos `null` (sem
+// dado na fonte para aquele dia/semana/mês) são excluídos do cálculo, não
+// tratados como 0. Se não sobrar nenhum valor numérico, retorna `null` e a
+// interface mostra "Sem dados disponíveis" em vez de inventar um número.
+// -----------------------------------------------------------------------
+interface PeriodStats {
+  max: number
+  min: number
+  avg: number
+}
+
+function computeStats(
+  history: RealHistoryResponse,
+  field: 'temperature' | 'precipitation' | 'humidity' | 'windSpeed'
+): PeriodStats | null {
+  const values = history.points.map((p) => p[field]).filter((v): v is number => v !== null)
+  if (values.length === 0) return null
+
+  const max = Math.max(...values)
+  const min = Math.min(...values)
+  const avg = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+  return { max, min, avg }
+}
+
 export default function HistoryPage() {
   const [period, setPeriod] = useState<HistoryPeriod>('7d')
 
@@ -107,6 +134,15 @@ export default function HistoryPage() {
           </div>
         )}
 
+        {historyState.status === 'success' && (
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <StatCard title="Temperatura" unit="°C" stats={computeStats(historyState.data, 'temperature')} />
+            <StatCard title="Chuva" unit="mm" stats={computeStats(historyState.data, 'precipitation')} />
+            <StatCard title="Umidade" unit="%" stats={computeStats(historyState.data, 'humidity')} />
+            <StatCard title="Vento" unit="km/h" stats={computeStats(historyState.data, 'windSpeed')} />
+          </div>
+        )}
+
         <div className="space-y-4">
           <ChartCard
             title="Chuva (mm)"
@@ -154,6 +190,50 @@ export default function HistoryPage() {
           />
         </div>
       </div>
+    </div>
+  )
+}
+
+interface StatCardProps {
+  title: string
+  unit: string
+  stats: PeriodStats | null
+}
+
+// Card de resumo (máx/mín/média) de uma variável no período selecionado.
+// `stats` já vem calculado por computeStats() a partir dos dados reais -
+// este componente só exibe; nunca decide nem inventa um valor.
+function StatCard({ title, unit, stats }: StatCardProps) {
+  return (
+    <div className="card p-3">
+      <h4 className="mb-2 text-xs font-semibold text-slate-500">{title}</h4>
+      {stats === null ? (
+        <p className="text-xs text-slate-400">Sem dados disponíveis</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-1 text-center">
+          <div>
+            <div className="text-[10px] text-slate-400">Máx</div>
+            <div className="text-sm font-bold text-slate-800">
+              {stats.max}
+              {unit}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400">Mín</div>
+            <div className="text-sm font-bold text-slate-800">
+              {stats.min}
+              {unit}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400">Média</div>
+            <div className="text-sm font-bold text-slate-800">
+              {stats.avg}
+              {unit}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

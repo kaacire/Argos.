@@ -1,11 +1,3 @@
-// ARGOS - Backend (Primeira Etapa: Mapa)
-// Schema mínimo necessário para persistir dados meteorológicos reais
-// obtidos da Open-Meteo e servidos ao MapPage.tsx.
-//
-// Somente a tabela realmente usada nesta etapa (WeatherData) existe aqui.
-// Nenhuma tabela para IA, relatos ou histórico completo foi criada -
-// essas funcionalidades ainda não foram implementadas (ver README, seção 2).
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,9 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Registro normalizado de uma consulta à Open-Meteo para um ponto (lat/lng).
-// Cada linha é uma "foto" do clima naquele momento - serve tanto como
-// persistência real quanto como cache de curta duração (ver weatherService.ts).
 model WeatherData {
   id            String   @id @default(cuid())
   latitude      Float
@@ -26,35 +15,21 @@ model WeatherData {
   condition     String
   humidity      Float
   windSpeed     Float
-  // Precipitação atual (mm), variável real da Open-Meteo (&current=precipitation).
-  precipitation Float    @default(0)
-  // Previsão diária (próximos dias) no momento da consulta, normalizada em
-  // ForecastDay[] (ver types.ts). Guardada como snapshot em JSON porque é
-  // uma lista de tamanho variável, não uma métrica escalar como as demais
-  // colunas - e porque a previsão muda a cada nova consulta à Open-Meteo,
-  // então não faz sentido normalizá-la em outra tabela relacional agora.
-  forecast      Json?
   city          String
   state         String
   source        String   @default("open-meteo")
   fetchedAt     DateTime @default(now())
+  precipitation Float    @default(0)
+  forecast      Json?
 
   @@index([latitude, longitude, fetchedAt])
 }
 
-// Cache de resultados já agregados da página Histórico (7d/3m/1y), vindos da
-// Historical Weather API da Open-Meteo (ver services/history/). Uma linha
-// por combinação (latitude, longitude, period) - o registro é sobrescrito
-// (upsert) quando expira, em vez de acumular um log como WeatherData,
-// porque aqui só precisamos do resultado mais recente da janela deslizante
-// de cada período, não de um histórico de "quando foi consultado".
 model WeatherHistoryCache {
   id        String   @id @default(cuid())
   latitude  Float
   longitude Float
-  // '7d' | '3m' | '1y'
   period    String
-  // HistoryPoint[] normalizado (ver backend/src/types.ts)
   points    Json
   source    String   @default("open-meteo")
   fetchedAt DateTime @default(now())

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { SENTO_SE_COORDS, mapLayers, mapMarkers, mapOccurrences, mapShelters, riskZones } from '../data/mockData'
-import { fetchRealWeather, fetchRealRainLayer, type MapApiState, type RealWeatherData, type RealRainPoint } from '../data/mapApi'
+import { fetchRealWeather, fetchRealRainLayer, fetchRealRivers, type MapApiState, type RealWeatherData, type RealRainPoint, type RealRiver } from '../data/mapApi'
 import { riskZoneConfig } from '../utils/riskColors'
 import 'leaflet/dist/leaflet.css'
 
@@ -64,6 +64,7 @@ export default function MapPage() {
   // Camada "Chuva": precipitação real da Open-Meteo para 3 pontos fixos
   // (GET /api/rain no backend). Ver src/data/mapApi.ts.
   const [rainState, setRainState] = useState<MapApiState<RealRainPoint[]>>({ status: 'loading' })
+  const [riverState, setRiverState] = useState<MapApiState<RealRiver[]>>({ status: 'loading' })
 
   useEffect(() => {
     let cancelled = false
@@ -107,6 +108,20 @@ export default function MapPage() {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setRiverState({ status: 'loading' })
+    fetchRealRivers(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
+      .then((result) => {
+        if (cancelled) return
+        setRiverState({ status: 'success', data: result.status === 'no-data' || !result.data ? [] : [result.data] })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setRiverState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar os dados dos rios.' })
+      })
+    return () => { cancelled = true }
   }, [])
 
   const toggleLayer = (id: string) => {
@@ -194,6 +209,15 @@ export default function MapPage() {
               {rainState.status === 'error' && (
                 <span className="text-red-600">Erro ao carregar chuva: {rainState.message}</span>
               )}
+            </div>
+          )}
+
+          {activeLayers.has('rios') && (
+            <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
+              {riverState.status === 'loading' && <span className="text-slate-600">Carregando dados reais dos rios...</span>}
+              {riverState.status === 'error' && <span className="text-red-600">Não foi possível atualizar os níveis dos rios. {riverState.message}</span>}
+              {riverState.status === 'success' && riverState.data.length === 0 && <span className="text-amber-700">Não existem dados de nível dos rios disponíveis para esta região.</span>}
+              {riverState.status === 'success' && riverState.data.length > 0 && <span className="text-emerald-700">Níveis dos rios atualizados com dados reais.</span>}
             </div>
           )}
 
@@ -404,23 +428,23 @@ export default function MapPage() {
                 </Marker>
               ))}
 
-            {activeLayers.has('rios') &&
-              mapMarkers.rios.map((m, i) => (
-                <CircleMarker
-                  key={`rio-${i}`}
-                  center={[m.lat, m.lng]}
-                  radius={14}
-                  pathOptions={{
-                    color: '#1d4ed8',
-                    fillColor: '#1d4ed8',
-                    fillOpacity: 0.4,
-                  }}
-                >
-                  <Popup>
-                    {m.name}: nível {m.level}m
-                  </Popup>
-                </CircleMarker>
-              ))}
+            {activeLayers.has('rios') && riverState.status === 'success' && riverState.data.map((river, i) => (
+              <CircleMarker
+                key={`rio-${river.station}-${i}`}
+                center={[river.latitude ?? SENTO_SE_COORDS[0], river.longitude ?? SENTO_SE_COORDS[1]]}
+                radius={14}
+                pathOptions={{ color: '#1d4ed8', fillColor: '#1d4ed8', fillOpacity: 0.4 }}
+              >
+                <Popup>
+                  <div className="space-y-1 text-sm">
+                    <div className="font-semibold">Estação: {river.station}</div>
+                    <div>Nível: {river.level} {river.unit}</div>
+                    <div>Horário: {new Date(river.timestamp).toLocaleString('pt-BR')}</div>
+                    <div className="text-xs text-gray-500">Fonte: {river.source}{river.cached ? ' — cache' : ' — atual'}</div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
           </MapContainer>
         </div>
 
