@@ -17,7 +17,10 @@ export default function ReportsPage() {
 
       <div className="px-4 pt-4">
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm text-slate-500">Relatos enviados pela população</p>
+          <div>
+            <p className="text-sm text-slate-500">Relatos enviados pela população</p>
+            <p className="mt-0.5 text-xs italic text-slate-400">Mock - dados não reais.</p>
+          </div>
           <button className="flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
             <Filter size={14} />
             Filtrar

@@ -13,10 +13,23 @@ import {
   Droplets,
   Maximize2,
   Minimize2,
+  Activity,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { SENTO_SE_COORDS, mapLayers, mapMarkers, mapOccurrences, mapShelters, riskZones } from '../data/mockData'
-import { fetchRealWeather, fetchRealRainLayer, fetchRealRivers, type MapApiState, type RealWeatherData, type RealRainPoint, type RealRiver } from '../data/mapApi'
+import {
+  fetchRealWeather,
+  fetchRealRainLayer,
+  fetchRealRivers,
+  fetchRealEarthquakes,
+  fetchRealLandslideSusceptibility,
+  type MapApiState,
+  type RealWeatherData,
+  type RealRainPoint,
+  type RealRiver,
+  type RealEarthquakeEvent,
+  type LandslideApiResponse,
+} from '../data/mapApi'
 import { riskZoneConfig } from '../utils/riskColors'
 import 'leaflet/dist/leaflet.css'
 
@@ -30,11 +43,23 @@ const iconMap: Record<string, typeof CloudRain> = {
   'message-square': MessageSquare,
   home: Home,
   droplets: Droplets,
+  activity: Activity,
 }
 
 const shelterIcon = new L.DivIcon({
   html: `<div style="background:#eab308;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+  </div>`,
+  className: '',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+})
+
+// Ícone de pin para a localização real do usuário (via navigator.geolocation).
+const userLocationIcon = new L.DivIcon({
+  html: `<div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center">
+    <div style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(59,130,246,0.25)"></div>
+    <div style="width:14px;height:14px;border-radius:50%;background:#3b82f6;border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>
   </div>`,
   className: '',
   iconSize: [28, 28],
@@ -53,8 +78,34 @@ function MapResizeHandler({ trigger }: { trigger: boolean }) {
 }
 
 export default function MapPage() {
-  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set(['zonas', 'relatos', 'abrigos']))
+  // Nenhuma camada vem ativada por padrão - o usuário decide o que quer ver.
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set())
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Localização real do usuário, via API de geolocalização do navegador.
+  // Não depende do backend - é lida direto do dispositivo.
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocalização não é suportada neste navegador.')
+      return
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation([position.coords.latitude, position.coords.longitude])
+        setLocationError(null)
+      },
+      (err) => {
+        setLocationError(err.message || 'Não foi possível obter sua localização.')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+    )
+
+    return () => navigator.geolocation.clearWatch(watchId)
+  }, [])
 
   // Camadas de temperatura e ventania passam a vir de dados reais
   // (Open-Meteo, via backend ARGOS). As demais camadas do mapa continuam
@@ -65,6 +116,14 @@ export default function MapPage() {
   // (GET /api/rain no backend). Ver src/data/mapApi.ts.
   const [rainState, setRainState] = useState<MapApiState<RealRainPoint[]>>({ status: 'loading' })
   const [riverState, setRiverState] = useState<MapApiState<RealRiver[]>>({ status: 'loading' })
+
+  // Camada "Terremotos": eventos sísmicos reais da USGS (GET /api/earthquakes,
+  // bounding box do Brasil inteiro por padrão). Ver src/data/mapApi.ts.
+  const [earthquakeState, setEarthquakeState] = useState<MapApiState<RealEarthquakeEvent[]>>({ status: 'loading' })
+
+  // Camada "Deslizamentos": suscetibilidade real do SGB/CPRM para o ponto
+  // de Sento Sé (GET /api/landslide-susceptibility). Ver src/data/mapApi.ts.
+  const [landslideState, setLandslideState] = useState<MapApiState<LandslideApiResponse>>({ status: 'loading' })
 
   useEffect(() => {
     let cancelled = false
@@ -124,6 +183,32 @@ export default function MapPage() {
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    setEarthquakeState({ status: 'loading' })
+    fetchRealEarthquakes()
+      .then((result) => {
+        if (!cancelled) setEarthquakeState({ status: 'success', data: result.events })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setEarthquakeState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar os dados de terremotos.' })
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setLandslideState({ status: 'loading' })
+    fetchRealLandslideSusceptibility(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
+      .then((result) => {
+        if (!cancelled) setLandslideState({ status: 'success', data: result })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setLandslideState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar a suscetibilidade a deslizamento.' })
+      })
+    return () => { cancelled = true }
+  }, [])
+
   const toggleLayer = (id: string) => {
     setActiveLayers((prev) => {
       const next = new Set(prev)
@@ -155,7 +240,7 @@ export default function MapPage() {
 
       <div className={isFullscreen ? 'relative min-h-0 flex-1' : 'px-4 pt-4'}>
         <div
-          className={isFullscreen ? 'relative h-full' : 'card relative overflow-hidden'}
+          className={isFullscreen ? 'relative h-full' : 'card relative overflow-hidden map-hide-attribution'}
           style={isFullscreen ? undefined : { height: '340px' }}
         >
           {isFullscreen ? (
@@ -190,25 +275,60 @@ export default function MapPage() {
             </button>
           )}
 
-          {(activeLayers.has('temperatura') || activeLayers.has('ventania')) && weatherState.status !== 'success' && (
+          {activeLayers.has('zonas') && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
+              Mock - Dados não reais.
+            </div>
+          )}
+
+          {activeLayers.has('temperatura') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
               {weatherState.status === 'loading' && (
-                <span className="text-slate-600">Carregando dados reais do clima (Open-Meteo)...</span>
+                <span className="text-slate-600">Carregando dados reais de temperatura (Open-Meteo)...</span>
               )}
               {weatherState.status === 'error' && (
-                <span className="text-red-600">Erro ao carregar clima: {weatherState.message}</span>
+                <span className="text-red-600">Não foi possível atualizar a temperatura. {weatherState.message}</span>
+              )}
+              {weatherState.status === 'success' && (
+                <span className="text-emerald-700">Temperatura atualizada com dados reais (Open-Meteo).</span>
               )}
             </div>
           )}
 
-          {activeLayers.has('chuva') && rainState.status !== 'success' && (
+          {activeLayers.has('ventania') && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
+              {weatherState.status === 'loading' && (
+                <span className="text-slate-600">Carregando dados reais de ventania (Open-Meteo)...</span>
+              )}
+              {weatherState.status === 'error' && (
+                <span className="text-red-600">Não foi possível atualizar a ventania. {weatherState.message}</span>
+              )}
+              {weatherState.status === 'success' && (
+                <span className="text-emerald-700">Ventania atualizada com dados reais (Open-Meteo).</span>
+              )}
+            </div>
+          )}
+
+          {activeLayers.has('chuva') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
               {rainState.status === 'loading' && (
                 <span className="text-slate-600">Carregando dados reais de chuva (Open-Meteo)...</span>
               )}
               {rainState.status === 'error' && (
-                <span className="text-red-600">Erro ao carregar chuva: {rainState.message}</span>
+                <span className="text-red-600">Não foi possível atualizar a chuva. {rainState.message}</span>
               )}
+              {rainState.status === 'success' && rainState.data.length === 0 && (
+                <span className="text-amber-700">Não existem dados de chuva disponíveis para esta região.</span>
+              )}
+              {rainState.status === 'success' && rainState.data.length > 0 && (
+                <span className="text-emerald-700">Chuva atualizada com dados reais (Open-Meteo).</span>
+              )}
+            </div>
+          )}
+
+          {activeLayers.has('alagamentos') && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
+              Mock - Dados não reais.
             </div>
           )}
 
@@ -218,6 +338,42 @@ export default function MapPage() {
               {riverState.status === 'error' && <span className="text-red-600">Não foi possível atualizar os níveis dos rios. {riverState.message}</span>}
               {riverState.status === 'success' && riverState.data.length === 0 && <span className="text-amber-700">Não existem dados de nível dos rios disponíveis para esta região.</span>}
               {riverState.status === 'success' && riverState.data.length > 0 && <span className="text-emerald-700">Níveis dos rios atualizados com dados reais.</span>}
+            </div>
+          )}
+
+          {activeLayers.has('sismos') && (
+            <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
+              {earthquakeState.status === 'loading' && <span className="text-slate-600">Carregando dados reais de sismos (USGS)...</span>}
+              {earthquakeState.status === 'error' && <span className="text-red-600">Não foi possível atualizar os sismos. {earthquakeState.message}</span>}
+              {earthquakeState.status === 'success' && earthquakeState.data.length === 0 && <span className="text-amber-700">Nenhum sismo registrado no período/janela consultada.</span>}
+              {earthquakeState.status === 'success' && earthquakeState.data.length > 0 && <span className="text-emerald-700">Sismos atualizados com dados reais (USGS).</span>}
+            </div>
+          )}
+
+          {activeLayers.has('relatos') && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
+              Mock - Dados não reais.
+            </div>
+          )}
+
+          {activeLayers.has('abrigos') && (
+            <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
+              Mock - Dados não reais.
+            </div>
+          )}
+
+          {locationError && (
+            <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
+              <span className="text-red-600">Localização: {locationError}</span>
+            </div>
+          )}
+
+          {activeLayers.has('deslizamentos') && (
+            <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
+              {landslideState.status === 'loading' && <span className="text-slate-600">Carregando suscetibilidade real a deslizamento (SGB/CPRM)...</span>}
+              {landslideState.status === 'error' && <span className="text-red-600">Não foi possível atualizar a suscetibilidade a deslizamento. {landslideState.message}</span>}
+              {landslideState.status === 'success' && landslideState.data.status === 'no-data' && <span className="text-amber-700">Sem carta de suscetibilidade a deslizamento publicada para esta região.</span>}
+              {landslideState.status === 'success' && landslideState.data.status === 'ok' && <span className="text-emerald-700">Suscetibilidade a deslizamento atualizada com dados reais (SGB/CPRM).</span>}
             </div>
           )}
 
@@ -376,20 +532,64 @@ export default function MapPage() {
               ))}
 
             {activeLayers.has('deslizamentos') &&
-              mapMarkers.deslizamentos.map((m, i) => (
+              landslideState.status === 'success' &&
+              landslideState.data.status === 'ok' && (
                 <CircleMarker
-                  key={`desl-${i}`}
-                  center={[m.lat, m.lng]}
-                  radius={12}
+                  center={SENTO_SE_COORDS}
+                  radius={30}
                   pathOptions={{
                     color: '#f97316',
                     fillColor: '#f97316',
-                    fillOpacity: 0.5,
+                    fillOpacity: 0.3,
                   }}
                 >
-                  <Popup>Deslizamento: {m.name}</Popup>
+                  <Popup>
+                    <div className="space-y-1 text-sm">
+                      <div className="font-semibold">Suscetibilidade a deslizamento</div>
+                      {landslideState.data.data.areas.map((area, i) => (
+                        <div key={i}>
+                          {area.municipio ?? 'Município não informado'}
+                          {area.uf ? ` - ${area.uf}` : ''}: classe {area.classe ?? 'não informada'}
+                        </div>
+                      ))}
+                      <div className="text-xs text-gray-500">
+                        SGB/CPRM{landslideState.data.data.cached ? ', em cache' : ''}
+                      </div>
+                    </div>
+                  </Popup>
                 </CircleMarker>
-              ))}
+              )}
+
+            {activeLayers.has('sismos') &&
+              earthquakeState.status === 'success' &&
+              earthquakeState.data.map((quake) => {
+                const magnitude = quake.magnitude ?? 0
+                const radius = Math.max(6, Math.min(24, magnitude * 4))
+                return (
+                  <CircleMarker
+                    key={quake.id}
+                    center={[quake.latitude, quake.longitude]}
+                    radius={radius}
+                    pathOptions={{
+                      color: '#dc2626',
+                      fillColor: '#dc2626',
+                      fillOpacity: 0.4,
+                    }}
+                  >
+                    <Popup>
+                      <div className="space-y-1 text-sm">
+                        <div className="font-semibold">
+                          {quake.magnitude !== null ? `Magnitude ${quake.magnitude} ${quake.magType ?? ''}` : 'Magnitude não informada'}
+                        </div>
+                        <div>{quake.place ?? 'Local não informado'}</div>
+                        {quake.depthKm !== null && <div>Profundidade: {quake.depthKm} km</div>}
+                        {quake.time && <div>Horário: {new Date(quake.time).toLocaleString('pt-BR')}</div>}
+                        <div className="text-xs text-gray-500">USGS Earthquake Catalog</div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                )
+              })}
 
             {activeLayers.has('relatos') &&
               mapOccurrences.map((o) => (
@@ -414,6 +614,12 @@ export default function MapPage() {
                   </Popup>
                 </CircleMarker>
               ))}
+
+            {userLocation && (
+              <Marker position={userLocation} icon={userLocationIcon}>
+                <Popup>Você está aqui</Popup>
+              </Marker>
+            )}
 
             {activeLayers.has('abrigos') &&
               mapShelters.map((s) => (

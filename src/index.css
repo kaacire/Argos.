@@ -46,6 +46,13 @@
   z-index: 0;
 }
 
+/* Esconde a marca "Leaflet | © OSM" apenas na miniatura do mapa
+   (MapPage.tsx fora do modo tela cheia). No modo tela cheia a
+   atribuição continua visível, como exigido pela OpenStreetMap. */
+.map-hide-attribution .leaflet-control-attribution {
+  display: none;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }

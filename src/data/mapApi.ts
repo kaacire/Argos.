@@ -96,3 +96,80 @@ export async function fetchRealRivers(lat: number, lng: number): Promise<RiverAp
   }
   return body as RiverApiResponse
 }
+
+// Um evento sísmico (backend/src/types.ts -> EarthquakeEventData).
+export interface RealEarthquakeEvent {
+  id: string
+  magnitude: number | null
+  magType: string | null
+  place: string | null
+  time: string | null
+  updated: string | null
+  latitude: number
+  longitude: number
+  depthKm: number | null
+  tsunami: boolean
+  alert: string | null
+  status: string | null
+  url: string | null
+}
+
+// Mesmo formato retornado por GET /api/earthquakes (backend/src/types.ts -> EarthquakesResponse).
+export interface EarthquakesApiResponse {
+  bbox: { minLatitude: number; maxLatitude: number; minLongitude: number; maxLongitude: number }
+  minMagnitude: number
+  days: number
+  count: number
+  events: RealEarthquakeEvent[]
+  source: 'usgs-earthquake'
+  cached: boolean
+}
+
+export async function fetchRealEarthquakes(): Promise<EarthquakesApiResponse> {
+  const response = await fetch('/api/earthquakes')
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error(body?.error ?? `Backend respondeu com status ${response.status}`)
+  }
+
+  return response.json()
+}
+
+// Uma área de suscetibilidade a deslizamento (backend/src/types.ts -> LandslideSusceptibilityArea).
+export interface RealLandslideArea {
+  municipio: string | null
+  uf: string | null
+  classe: string | null
+  source: 'cprm-sgb'
+}
+
+export interface RealLandslideData {
+  latitude: number
+  longitude: number
+  areas: RealLandslideArea[]
+  source: 'cprm-sgb'
+  cached: boolean
+}
+
+// Mesmo formato retornado por GET /api/landslide-susceptibility
+// (backend/src/types.ts -> LandslideSusceptibilityResponse).
+export type LandslideApiResponse =
+  | { status: 'ok'; data: RealLandslideData }
+  | { status: 'no-data'; data: null }
+
+export async function fetchRealLandslideSusceptibility(lat: number, lng: number): Promise<LandslideApiResponse> {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng) })
+  const response = await fetch(`/api/landslide-susceptibility?${params.toString()}`)
+  const body: unknown = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+      ? body.error
+      : `Backend respondeu com status ${response.status}`
+    throw new Error(message)
+  }
+  if (!body || typeof body !== 'object' || !('status' in body)) {
+    throw new Error('Resposta inválida do backend de suscetibilidade a deslizamento.')
+  }
+  return body as LandslideApiResponse
+}

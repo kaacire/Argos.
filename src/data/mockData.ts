@@ -195,6 +195,7 @@ export const mapLayers: MapLayer[] = [
   { id: 'relatos', name: 'Relatos', icon: 'message-square', color: '#22c55e' },
   { id: 'abrigos', name: 'Abrigos', icon: 'home', color: '#eab308' },
   { id: 'rios', name: 'Nível dos Rios', icon: 'droplets', color: '#1d4ed8' },
+  { id: 'sismos', name: 'Terremotos', icon: 'activity', color: '#dc2626' },
 ]
 
 // Regiões/áreas de risco do mapa, na escala de 5 níveis: normal, atencao, moderado, alto, critico.

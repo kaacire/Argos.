@@ -23,6 +23,7 @@ export default function AlertsPage() {
             Monitoramento ativo para <strong>Sento Sé - BA</strong>
           </p>
         </div>
+        <p className="-mt-2 mb-4 text-xs italic text-slate-400">Mock - dados não reais.</p>
 
         <div className="space-y-4">
           {alerts.map((alert, index) => {

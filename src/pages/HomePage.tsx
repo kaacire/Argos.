@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CloudRain,
@@ -14,7 +15,8 @@ import {
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import RiskBadge from '../components/RiskBadge'
-import { weatherData, alerts, dashboardRisk } from '../data/mockData'
+import { SENTO_SE_COORDS, weatherData as mockWeatherData, alerts, dashboardRisk } from '../data/mockData'
+import { fetchRealWeather, type MapApiState, type RealWeatherData } from '../data/mapApi'
 import {
   dataAvailabilityConfig,
   factorImpactConfig,
@@ -25,6 +27,40 @@ import {
 export default function HomePage() {
   const riskLevel = getRiskZoneLevelFromScore(dashboardRisk.score)
   const riskLevelConfig = riskZoneConfig[riskLevel]
+
+  // Clima real vindo do backend ARGOS (GET /api/weather, mesma integração
+  // Open-Meteo já usada no MapPage.tsx via src/data/mapApi.ts). O restante
+  // do dashboard (pontuação de risco, fatores, confiabilidade e alertas)
+  // continua vindo de mockData.ts, pois o backend ainda não tem essa fonte
+  // real conectada (ver backend/src/services/riskService.ts, placeholder
+  // não implementado).
+  const [weatherState, setWeatherState] = useState<MapApiState<RealWeatherData>>({ status: 'loading' })
+
+  useEffect(() => {
+    let cancelled = false
+    setWeatherState({ status: 'loading' })
+
+    fetchRealWeather(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
+      .then((data) => {
+        if (!cancelled) setWeatherState({ status: 'success', data })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setWeatherState({
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Não foi possível carregar os dados do clima.',
+          })
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Enquanto carrega ou em caso de erro, cai de volta no mock para não
+  // deixar a tela vazia/quebrada - mas usa o dado real assim que chega.
+  const weatherData = weatherState.status === 'success' ? weatherState.data : mockWeatherData
 
   return (
     <div className="page-container animate-fade-in">
@@ -42,8 +78,12 @@ export default function HomePage() {
 
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-6xl font-bold tracking-tight">{weatherData.temperature}°</p>
-            <p className="mt-1 text-lg text-white/90">{weatherData.condition}</p>
+            <p className="text-6xl font-bold tracking-tight">
+              {weatherState.status === 'loading' ? '--' : `${weatherData.temperature}°`}
+            </p>
+            <p className="mt-1 text-lg text-white/90">
+              {weatherState.status === 'error' ? 'Clima indisponível' : weatherData.condition}
+            </p>
           </div>
           <div className="text-right">
             <CloudRain size={64} className="text-white/30" />
@@ -106,8 +146,15 @@ export default function HomePage() {
 
           <div className="mt-3 flex items-center gap-1 text-xs text-slate-400">
             <Clock size={12} />
-            <span>Última atualização: {weatherData.lastUpdate}</span>
+            <span>
+              Última atualização:{' '}
+              {weatherState.status === 'success'
+                ? new Date(weatherState.data.lastUpdate).toLocaleTimeString('pt-BR')
+                : weatherData.lastUpdate}
+              {weatherState.status === 'success' && weatherState.data.cached ? ' (em cache)' : ''}
+            </span>
           </div>
+          <p className="mt-1 text-xs italic text-slate-400">Mock - dados não reais.</p>
         </div>
 
         <div className="mt-4 card p-4">
@@ -150,10 +197,12 @@ export default function HomePage() {
               )
             })}
           </div>
+          <p className="mt-1 text-xs italic text-slate-400">Mock - dados não reais.</p>
         </div>
 
         <div className="mt-4 card p-4">
           <h2 className="mb-3 font-bold text-slate-800">Confiabilidade da Estimativa</h2>
+            <p className="mt-1 text-xs italic text-slate-400">Mock - dados não reais.</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-slate-50 p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
@@ -204,12 +253,13 @@ export default function HomePage() {
         </div>
 
         <div className="mt-6">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between">
             <h2 className="font-bold text-slate-800">Alertas Ativos</h2>
             <Link to="/alertas" className="flex items-center gap-1 text-sm text-primary-600">
               Ver todos <ChevronRight size={16} />
             </Link>
           </div>
+          <p className="mb-3 text-xs italic text-slate-400">Mock - dados não reais.</p>
           <div className="space-y-3">
             {alerts.slice(0, 2).map((alert) => (
               <div key={alert.id} className="card card-hover p-3">
