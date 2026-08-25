@@ -36,3 +36,71 @@ model WeatherHistoryCache {
 
   @@unique([latitude, longitude, period])
 }
+
+// Cache de leitura para GET /api/rivers (nível de rio via ANA - webservice
+// legado). Todos os campos de observação são opcionais porque também
+// persistimos o caso "sem cobertura" (status = "no-data"), para não bater
+// repetidamente no webservice por uma coordenada/estação sem dado - sem
+// nunca inventar um valor. Ver backend/src/services/riverService.ts.
+// (source tinha default "usgs-water" antes da troca de fonte para a ANA -
+// linhas antigas no banco continuam com esse valor histórico.)
+model RiverObservation {
+  id            String    @id @default(cuid())
+  latitude      Float?
+  longitude     Float?
+  stationId     String?
+  stationName   String?
+  parameterCode String?
+  parameterName String?
+  value         Float?
+  unit          String?
+  observedAt    DateTime?
+  status        String
+  source        String    @default("ana-hidro")
+  fetchedAt     DateTime  @default(now())
+
+  @@index([latitude, longitude, fetchedAt])
+  @@index([stationId, fetchedAt])
+}
+
+// Cache de leitura para GET /api/earthquakes (USGS Earthquake Catalog -
+// cobre o Brasil inteiro, não só Sento Sé). Diferente de WeatherData/
+// RiverObservation, a busca aqui não é por um único ponto [lat,lng], e
+// sim por bounding box + magnitude mínima + janela de dias - por isso o
+// cache é chaveado por `queryKey` (esses parâmetros normalizados) em vez
+// de coordenadas. `events` guarda o array já normalizado (EarthquakeEventData[]).
+// Ver backend/src/services/earthquakeService.ts.
+model EarthquakeQueryCache {
+  id            String   @id @default(cuid())
+  queryKey      String   @unique
+  minLatitude   Float
+  maxLatitude   Float
+  minLongitude  Float
+  maxLongitude  Float
+  minMagnitude  Float
+  days          Int
+  events        Json
+  source        String   @default("usgs-earthquake")
+  fetchedAt     DateTime @default(now())
+
+  @@index([queryKey, fetchedAt])
+}
+
+// Cache de leitura para GET /api/landslide-susceptibility (CPRM/SGB - OGC
+// API, coleção de suscetibilidade a movimento de massa). Chaveado por
+// [latitude, longitude] igual a WeatherData/RiverObservation - `areas`
+// guarda o array já normalizado (LandslideSusceptibilityArea[]).
+// `status = 'no-data'` (com `areas` vazio) significa que nenhuma carta de
+// suscetibilidade publicada cobre esse ponto ainda - não é um erro. Ver
+// backend/src/services/landslideService.ts.
+model LandslideSusceptibilityCache {
+  id        String   @id @default(cuid())
+  latitude  Float
+  longitude Float
+  areas     Json
+  status    String
+  source    String   @default("cprm-sgb")
+  fetchedAt DateTime @default(now())
+
+  @@index([latitude, longitude, fetchedAt])
+}

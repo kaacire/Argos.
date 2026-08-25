@@ -82,3 +82,110 @@ export interface WeatherHistoryResponse {
   source: 'open-meteo'
   cached: boolean
 }
+
+// --- Nível dos rios (GET /api/rivers, ANA - webservice legado) -------------
+//
+// Fonte: ANA (Agência Nacional de Águas), webservice legado
+// telemetriaws1.ana.gov.br/ServiceANA.asmx - ver riverService.ts para o
+// histórico da troca (era USGS Water Data, só EUA) e os avisos sobre esta
+// integração. Para coordenadas sem estação da ANA por perto, a resposta
+// correta NÃO é um erro de rota, e sim `{ status: 'no-data', data: null }`
+// - nunca um nível inventado.
+
+export type RiverStatus = 'ok' | 'no-data'
+
+export interface RiverObservationData {
+  stationId: string
+  stationName: string | null
+  latitude: number | null
+  longitude: number | null
+  // Código do tipo de dado da ANA ("1" = Cotas/nível da régua - o único
+  // usado aqui). `unit` sempre reflete a unidade original da ANA (cm).
+  parameterCode: string
+  parameterName: string | null
+  value: number
+  unit: string | null
+  observedAt: string
+  source: 'ana-hidro'
+  cached: boolean
+}
+
+export type RiverLevelResponse =
+  | { status: 'ok'; data: RiverObservationData }
+  | { status: 'no-data'; data: null }
+
+// --- Terremotos (GET /api/earthquakes, USGS Earthquake Catalog) -----------
+//
+// Fonte: USGS (United States Geological Survey), earthquake.usgs.gov -
+// ver integrations/external/usgs-earthquake/service.ts. Apesar do nome,
+// é um catálogo GLOBAL (não só EUA): cobre qualquer bounding box do
+// planeta, incluindo o Brasil inteiro, sem exigir cadastro/token. Não
+// existe uma API pública/estável equivalente da Rede Sismográfica
+// Brasileira (RSBR) no momento em que esta integração foi escrita - ver
+// services/earthquakeService.ts.
+
+export interface EarthquakeEventData {
+  id: string
+  magnitude: number | null
+  magType: string | null
+  place: string | null
+  // ISO 8601. `null` quando a USGS não retornou timestamp para o evento.
+  time: string | null
+  updated: string | null
+  latitude: number
+  longitude: number
+  depthKm: number | null
+  tsunami: boolean
+  alert: string | null
+  status: string | null
+  url: string | null
+}
+
+export interface EarthquakesResponse {
+  bbox: { minLatitude: number; maxLatitude: number; minLongitude: number; maxLongitude: number }
+  minMagnitude: number
+  days: number
+  count: number
+  events: EarthquakeEventData[]
+  source: 'usgs-earthquake'
+  cached: boolean
+}
+
+// --- Suscetibilidade a deslizamento (GET /api/landslide-susceptibility,
+// SGB/CPRM - OGC API) -------------------------------------------------------
+//
+// Fonte: SGB/CPRM (Serviço Geológico do Brasil), OGC API em
+// geoservicos.sgb.gov.br/ogcapi, coleção "Prevenção de Desastres:
+// Suscetibilidade a Movimento de Massa" - ver
+// services/landslideService.ts e integrations/external/cprm/. Cartografia
+// de suscetibilidade a movimentos gravitacionais de massa (deslizamentos,
+// corridas de massa) por município. Cobertura NACIONAL, mas não é 100% do
+// Brasil ainda (cerca de 700 municípios com carta publicada no momento em
+// que esta integração foi escrita) - para coordenadas sem carta
+// publicada, a resposta correta é `{ status: 'no-data', data: null }`,
+// igual ao padrão já usado em rivers.
+
+export type LandslideSusceptibilityStatus = 'ok' | 'no-data'
+
+// Um polígono de suscetibilidade que intersecta o bbox consultado. `classe`
+// é o texto original retornado pela CPRM (ex.: "Alta", "Média", "Baixa") -
+// não normalizado nem traduzido, para não inventar uma categorização que a
+// fonte não garantiu.
+export interface LandslideSusceptibilityArea {
+  municipio: string | null
+  uf: string | null
+  classe: string | null
+  source: 'cprm-sgb'
+}
+
+export interface LandslideSusceptibilityData {
+  latitude: number
+  longitude: number
+  areas: LandslideSusceptibilityArea[]
+  source: 'cprm-sgb'
+  cached: boolean
+}
+
+export type LandslideSusceptibilityResponse =
+  | { status: 'ok'; data: LandslideSusceptibilityData }
+  | { status: 'no-data'; data: null }
