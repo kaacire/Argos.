@@ -1,0 +1,20 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Redireciona chamadas de API do frontend (ex: fetch('/api/weather'))
+# para o backend hospedado no Render, já que o Netlify só serve o
+# frontend estático e não tem esse backend rodando nele.
+[[redirects]]
+  from = "/api/*"
+  to = "https://argos-end.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Fallback de SPA: qualquer rota que não seja /api/* e não bata em um
+# arquivo estático real deve cair no index.html, para o React Router
+# (BrowserRouter) assumir o roteamento no client.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

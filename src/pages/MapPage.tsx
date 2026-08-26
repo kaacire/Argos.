@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Circle, CircleMarker, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import {
@@ -14,6 +14,7 @@ import {
   Maximize2,
   Minimize2,
   Activity,
+  LocateFixed,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { SENTO_SE_COORDS, mapLayers, mapMarkers, mapOccurrences, mapShelters, riskZones } from '../data/mockData'
@@ -77,10 +78,71 @@ function MapResizeHandler({ trigger }: { trigger: boolean }) {
   return null
 }
 
+// Captura a instância do mapa Leaflet (via useMap, só funciona dentro do
+// MapContainer) e repassa pro componente pai através de callback, para que
+// o botão "Minha localização" (renderizado fora do MapContainer, como
+// overlay HTML normal) consiga chamar flyTo nela.
+function MapInstanceCapture({ onReady }: { onReady: (map: L.Map) => void }) {
+  const map = useMap()
+  useEffect(() => {
+    onReady(map)
+  }, [map, onReady])
+  return null
+}
+
 export default function MapPage() {
   // Nenhuma camada vem ativada por padrão - o usuário decide o que quer ver.
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set())
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Some depois de 5s: quando uma camada é ativada, a mensagem de status
+  // que aparece embaixo do mapa (loading/erro/sucesso/mock) deve
+  // desaparecer sozinha após 5 segundos - evita poluir o mapa com uma
+  // caixa de texto grudada na tela indefinidamente. Se a camada for
+  // desativada e reativada, a mensagem volta a aparecer do zero.
+  const [hiddenMessageLayers, setHiddenMessageLayers] = useState<Set<string>>(new Set())
+  const messageTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    activeLayers.forEach((layerId) => {
+      if (messageTimersRef.current.has(layerId)) return
+      setHiddenMessageLayers((prev) => {
+        if (!prev.has(layerId)) return prev
+        const next = new Set(prev)
+        next.delete(layerId)
+        return next
+      })
+      const timer = setTimeout(() => {
+        setHiddenMessageLayers((prev) => new Set(prev).add(layerId))
+        messageTimersRef.current.delete(layerId)
+      }, 5000)
+      messageTimersRef.current.set(layerId, timer)
+    })
+
+    messageTimersRef.current.forEach((timer, layerId) => {
+      if (activeLayers.has(layerId)) return
+      clearTimeout(timer)
+      messageTimersRef.current.delete(layerId)
+      setHiddenMessageLayers((prev) => {
+        if (!prev.has(layerId)) return prev
+        const next = new Set(prev)
+        next.delete(layerId)
+        return next
+      })
+    })
+  }, [activeLayers])
+
+  useEffect(() => {
+    const timers = messageTimersRef.current
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
+
+  // Instância do mapa Leaflet, capturada via MapInstanceCapture - usada
+  // pelo botão "Minha localização" para centralizar (flyTo) sem mudar o
+  // center/zoom padrão do MapContainer, que continua fixo em Sento Sé.
+  const mapInstanceRef = useRef<L.Map | null>(null)
 
   // Localização real do usuário, via API de geolocalização do navegador.
   // Não depende do backend - é lida direto do dispositivo.
@@ -244,44 +306,68 @@ export default function MapPage() {
           style={isFullscreen ? undefined : { height: '340px' }}
         >
           {isFullscreen ? (
-            <div className="absolute left-3 top-3 z-[1000] flex max-h-[calc(100%-1.5rem)] flex-col gap-1.5 overflow-y-auto rounded-2xl bg-white/95 p-2 shadow-lg backdrop-blur">
-              {mapLayers.map((layer) => {
-                const Icon = iconMap[layer.icon]
-                const isActive = activeLayers.has(layer.id)
-                return (
-                  <button
-                    key={layer.id}
-                    onClick={() => toggleLayer(layer.id)}
-                    title={layer.name}
-                    className={`flex items-center gap-2 rounded-xl border-2 px-2.5 py-2 text-left text-xs font-medium transition-all duration-300 ${
-                      isActive
-                        ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
-                        : 'border-transparent bg-white text-slate-600 hover:border-slate-200'
-                    }`}
-                  >
-                    <Icon size={16} style={{ color: isActive ? layer.color : undefined }} />
-                    <span className="whitespace-nowrap">{layer.name}</span>
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div className="absolute left-3 top-3 z-[1000] flex max-h-[calc(100%-1.5rem)] flex-col gap-1.5 overflow-y-auto rounded-2xl bg-white/95 p-2 shadow-lg backdrop-blur">
+                {mapLayers.map((layer) => {
+                  const Icon = iconMap[layer.icon]
+                  const isActive = activeLayers.has(layer.id)
+                  return (
+                    <button
+                      key={layer.id}
+                      onClick={() => toggleLayer(layer.id)}
+                      title={layer.name}
+                      className={`flex items-center gap-2 rounded-xl border-2 px-2.5 py-2 text-left text-xs font-medium transition-all duration-300 ${
+                        isActive
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
+                          : 'border-transparent bg-white text-slate-600 hover:border-slate-200'
+                      }`}
+                    >
+                      <Icon size={16} style={{ color: isActive ? layer.color : undefined }} />
+                      <span className="whitespace-nowrap">{layer.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {userLocation && (
+                <button
+                  onClick={() => mapInstanceRef.current?.flyTo(userLocation, 16)}
+                  title="Centralizar na minha localização"
+                  className="absolute right-2 top-2 z-[1000] flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-md transition-colors hover:bg-slate-50"
+                >
+                  <LocateFixed size={14} className="text-blue-600" />
+                  Minha localização
+                </button>
+              )}
+            </>
           ) : (
-            <button
-              onClick={() => setIsFullscreen(true)}
-              className="absolute right-2 top-2 z-[1000] flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-md transition-colors hover:bg-slate-50"
-            >
-              <Maximize2 size={14} />
-              Tela cheia
-            </button>
+            <>
+              <button
+                onClick={() => setIsFullscreen(true)}
+                className="absolute right-2 top-2 z-[1000] flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-md transition-colors hover:bg-slate-50"
+              >
+                <Maximize2 size={14} />
+                Tela cheia
+              </button>
+              {userLocation && (
+                <button
+                  onClick={() => mapInstanceRef.current?.flyTo(userLocation, 16)}
+                  title="Centralizar na minha localização - o mapa fica em Sento Sé por padrão, então sua posição real pode estar fora da área visível"
+                  className="absolute right-2 top-12 z-[1000] flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-md transition-colors hover:bg-slate-50"
+                >
+                  <LocateFixed size={14} className="text-blue-600" />
+                  Minha localização
+                </button>
+              )}
+            </>
           )}
 
-          {activeLayers.has('zonas') && (
+          {activeLayers.has('zonas') && !hiddenMessageLayers.has('zonas') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
               Mock - Dados não reais.
             </div>
           )}
 
-          {activeLayers.has('temperatura') && (
+          {activeLayers.has('temperatura') && !hiddenMessageLayers.has('temperatura') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
               {weatherState.status === 'loading' && (
                 <span className="text-slate-600">Carregando dados reais de temperatura (Open-Meteo)...</span>
@@ -295,7 +381,7 @@ export default function MapPage() {
             </div>
           )}
 
-          {activeLayers.has('ventania') && (
+          {activeLayers.has('ventania') && !hiddenMessageLayers.has('ventania') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
               {weatherState.status === 'loading' && (
                 <span className="text-slate-600">Carregando dados reais de ventania (Open-Meteo)...</span>
@@ -309,7 +395,7 @@ export default function MapPage() {
             </div>
           )}
 
-          {activeLayers.has('chuva') && (
+          {activeLayers.has('chuva') && !hiddenMessageLayers.has('chuva') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md">
               {rainState.status === 'loading' && (
                 <span className="text-slate-600">Carregando dados reais de chuva (Open-Meteo)...</span>
@@ -326,13 +412,13 @@ export default function MapPage() {
             </div>
           )}
 
-          {activeLayers.has('alagamentos') && (
+          {activeLayers.has('alagamentos') && !hiddenMessageLayers.has('alagamentos') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
               Mock - Dados não reais.
             </div>
           )}
 
-          {activeLayers.has('rios') && (
+          {activeLayers.has('rios') && !hiddenMessageLayers.has('rios') && (
             <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
               {riverState.status === 'loading' && <span className="text-slate-600">Carregando dados reais dos rios...</span>}
               {riverState.status === 'error' && <span className="text-red-600">Não foi possível atualizar os níveis dos rios. {riverState.message}</span>}
@@ -341,7 +427,7 @@ export default function MapPage() {
             </div>
           )}
 
-          {activeLayers.has('sismos') && (
+          {activeLayers.has('sismos') && !hiddenMessageLayers.has('sismos') && (
             <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
               {earthquakeState.status === 'loading' && <span className="text-slate-600">Carregando dados reais de sismos (USGS)...</span>}
               {earthquakeState.status === 'error' && <span className="text-red-600">Não foi possível atualizar os sismos. {earthquakeState.message}</span>}
@@ -350,13 +436,13 @@ export default function MapPage() {
             </div>
           )}
 
-          {activeLayers.has('relatos') && (
+          {activeLayers.has('relatos') && !hiddenMessageLayers.has('relatos') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
               Mock - Dados não reais.
             </div>
           )}
 
-          {activeLayers.has('abrigos') && (
+          {activeLayers.has('abrigos') && !hiddenMessageLayers.has('abrigos') && (
             <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-2.5 py-1.5 text-xs font-medium italic text-slate-500 shadow-md">
               Mock - Dados não reais.
             </div>
@@ -368,7 +454,7 @@ export default function MapPage() {
             </div>
           )}
 
-          {activeLayers.has('deslizamentos') && (
+          {activeLayers.has('deslizamentos') && !hiddenMessageLayers.has('deslizamentos') && (
             <div className="absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/95 px-3 py-2 text-xs font-medium shadow-md backdrop-blur">
               {landslideState.status === 'loading' && <span className="text-slate-600">Carregando suscetibilidade real a deslizamento (SGB/CPRM)...</span>}
               {landslideState.status === 'error' && <span className="text-red-600">Não foi possível atualizar a suscetibilidade a deslizamento. {landslideState.message}</span>}
@@ -379,6 +465,7 @@ export default function MapPage() {
 
           <MapContainer center={SENTO_SE_COORDS} zoom={14} scrollWheelZoom={isFullscreen} style={{ height: '100%', width: '100%' }}>
             <MapResizeHandler trigger={isFullscreen} />
+            <MapInstanceCapture onReady={(map) => { mapInstanceRef.current = map }} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -425,6 +512,10 @@ export default function MapPage() {
                     </CircleMarker>
                   )
                 }
+                // Não marca o círculo se a chuva real for insignificante (região
+                // semiárida - a maior parte do tempo não há chuva de verdade, e
+                // marcar um círculo mesmo assim passa a impressão errada).
+                if (point.precipitation < 0.2) return null
                 // Raio proporcional à precipitação real (mm), limitado a uma faixa visível no mapa.
                 const radius = Math.max(8, Math.min(30, 8 + point.precipitation * 3))
                 return (
@@ -452,7 +543,7 @@ export default function MapPage() {
                 )
               })}
 
-            {activeLayers.has('temperatura') && (
+            {activeLayers.has('temperatura') && weatherState.status === 'success' && (
               <CircleMarker
                 center={SENTO_SE_COORDS}
                 radius={40}
@@ -463,57 +554,52 @@ export default function MapPage() {
                 }}
               >
                 <Popup>
-                  {weatherState.status === 'loading' && 'Carregando temperatura...'}
-                  {weatherState.status === 'error' && 'Erro ao carregar temperatura.'}
-                  {weatherState.status === 'success' && (
-                    <div className="space-y-1 text-sm">
-                      <div className="font-semibold">
-                        {weatherState.data.temperature}°C — {weatherState.data.condition}
-                      </div>
-                      <div>Umidade: {weatherState.data.humidity >= 0 ? `${weatherState.data.humidity}%` : 'indisponível'}</div>
-                      <div>
-                        Precipitação atual:{' '}
-                        {weatherState.data.precipitation >= 0 ? `${weatherState.data.precipitation} mm` : 'indisponível'}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Open-Meteo{weatherState.data.cached ? ', em cache' : ''} — atualizado em{' '}
-                        {new Date(weatherState.data.lastUpdate).toLocaleString('pt-BR')}
-                      </div>
-                      {weatherState.data.forecast.length > 0 && (
-                        <div className="mt-2 border-t pt-1">
-                          <div className="text-xs font-semibold">Previsão (Open-Meteo)</div>
-                          {weatherState.data.forecast.slice(0, 5).map((day) => (
-                            <div key={day.date} className="text-xs">
-                              {new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
-                              : {day.temperatureMin}°–{day.temperatureMax}°C, chuva {day.precipitationSum}mm ({day.condition})
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                  <div className="space-y-1 text-sm">
+                    <div className="font-semibold">
+                      {weatherState.data.temperature}°C — {weatherState.data.condition}
                     </div>
-                  )}
+                    <div>Umidade: {weatherState.data.humidity >= 0 ? `${weatherState.data.humidity}%` : 'indisponível'}</div>
+                    <div>
+                      Precipitação atual:{' '}
+                      {weatherState.data.precipitation >= 0 ? `${weatherState.data.precipitation} mm` : 'indisponível'}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Open-Meteo{weatherState.data.cached ? ', em cache' : ''} — atualizado em{' '}
+                      {new Date(weatherState.data.lastUpdate).toLocaleString('pt-BR')}
+                    </div>
+                    {weatherState.data.forecast.length > 0 && (
+                      <div className="mt-2 border-t pt-1">
+                        <div className="text-xs font-semibold">Previsão (Open-Meteo)</div>
+                        {weatherState.data.forecast.slice(0, 5).map((day) => (
+                          <div key={day.date} className="text-xs">
+                            {new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                            : {day.temperatureMin}°–{day.temperatureMax}°C, chuva {day.precipitationSum}mm ({day.condition})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </Popup>
               </CircleMarker>
             )}
 
-            {activeLayers.has('ventania') && (
-              <CircleMarker
-                center={SENTO_SE_COORDS}
-                radius={25}
-                pathOptions={{
-                  color: '#8b5cf6',
-                  fillColor: '#8b5cf6',
-                  fillOpacity: 0.2,
-                }}
-              >
-                <Popup>
-                  {weatherState.status === 'loading' && 'Carregando vento...'}
-                  {weatherState.status === 'error' && 'Erro ao carregar vento.'}
-                  {weatherState.status === 'success' &&
-                    `Vento atual: ${weatherState.data.windSpeed} km/h (Open-Meteo${weatherState.data.cached ? ', em cache' : ''}, ${new Date(weatherState.data.lastUpdate).toLocaleTimeString('pt-BR')})`}
-                </Popup>
-              </CircleMarker>
-            )}
+            {activeLayers.has('ventania') &&
+              weatherState.status === 'success' &&
+              weatherState.data.windSpeed >= 3 && (
+                <CircleMarker
+                  center={SENTO_SE_COORDS}
+                  radius={25}
+                  pathOptions={{
+                    color: '#8b5cf6',
+                    fillColor: '#8b5cf6',
+                    fillOpacity: 0.2,
+                  }}
+                >
+                  <Popup>
+                    {`Vento atual: ${weatherState.data.windSpeed} km/h (Open-Meteo${weatherState.data.cached ? ', em cache' : ''}, ${new Date(weatherState.data.lastUpdate).toLocaleTimeString('pt-BR')})`}
+                  </Popup>
+                </CircleMarker>
+              )}
 
             {activeLayers.has('alagamentos') &&
               mapMarkers.alagamentos.map((m, i) => (
@@ -533,7 +619,14 @@ export default function MapPage() {
 
             {activeLayers.has('deslizamentos') &&
               landslideState.status === 'success' &&
-              landslideState.data.status === 'ok' && (
+              landslideState.data.status === 'ok' &&
+              // Só marca o círculo de risco se pelo menos uma área retornada
+              // pela CPRM/SGB tiver classificação relevante. Se a classe real
+              // for "Baixa"/"Nula" (ou não informada), marcar um círculo
+              // grande de risco no mapa passaria uma informação falsa.
+              landslideState.data.data.areas.some(
+                (area) => area.classe && !/baixa|nula|nenhuma/i.test(area.classe)
+              ) && (
                 <CircleMarker
                   center={SENTO_SE_COORDS}
                   radius={30}
@@ -562,34 +655,36 @@ export default function MapPage() {
 
             {activeLayers.has('sismos') &&
               earthquakeState.status === 'success' &&
-              earthquakeState.data.map((quake) => {
-                const magnitude = quake.magnitude ?? 0
-                const radius = Math.max(6, Math.min(24, magnitude * 4))
-                return (
-                  <CircleMarker
-                    key={quake.id}
-                    center={[quake.latitude, quake.longitude]}
-                    radius={radius}
-                    pathOptions={{
-                      color: '#dc2626',
-                      fillColor: '#dc2626',
-                      fillOpacity: 0.4,
-                    }}
-                  >
-                    <Popup>
-                      <div className="space-y-1 text-sm">
-                        <div className="font-semibold">
-                          {quake.magnitude !== null ? `Magnitude ${quake.magnitude} ${quake.magType ?? ''}` : 'Magnitude não informada'}
+              earthquakeState.data
+                .filter((quake) => quake.magnitude !== null && quake.magnitude > 0)
+                .map((quake) => {
+                  const magnitude = quake.magnitude as number
+                  const radius = Math.max(6, Math.min(24, magnitude * 4))
+                  return (
+                    <CircleMarker
+                      key={quake.id}
+                      center={[quake.latitude, quake.longitude]}
+                      radius={radius}
+                      pathOptions={{
+                        color: '#dc2626',
+                        fillColor: '#dc2626',
+                        fillOpacity: 0.4,
+                      }}
+                    >
+                      <Popup>
+                        <div className="space-y-1 text-sm">
+                          <div className="font-semibold">
+                            Magnitude {quake.magnitude} {quake.magType ?? ''}
+                          </div>
+                          <div>{quake.place ?? 'Local não informado'}</div>
+                          {quake.depthKm !== null && <div>Profundidade: {quake.depthKm} km</div>}
+                          {quake.time && <div>Horário: {new Date(quake.time).toLocaleString('pt-BR')}</div>}
+                          <div className="text-xs text-gray-500">USGS Earthquake Catalog</div>
                         </div>
-                        <div>{quake.place ?? 'Local não informado'}</div>
-                        {quake.depthKm !== null && <div>Profundidade: {quake.depthKm} km</div>}
-                        {quake.time && <div>Horário: {new Date(quake.time).toLocaleString('pt-BR')}</div>}
-                        <div className="text-xs text-gray-500">USGS Earthquake Catalog</div>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                )
-              })}
+                      </Popup>
+                    </CircleMarker>
+                  )
+                })}
 
             {activeLayers.has('relatos') &&
               mapOccurrences.map((o) => (

@@ -197,12 +197,10 @@ export default function HomePage() {
               )
             })}
           </div>
-          <p className="mt-1 text-xs italic text-slate-400">Mock - dados não reais.</p>
         </div>
 
         <div className="mt-4 card p-4">
           <h2 className="mb-3 font-bold text-slate-800">Confiabilidade da Estimativa</h2>
-            <p className="mt-1 text-xs italic text-slate-400">Mock - dados não reais.</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-slate-50 p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">

@@ -9,7 +9,11 @@
 // com valores como "Alta").
 import type { ArcGisGeoJsonFeatureCollection } from './types.js'
 
-export const CPRM_ARCGIS_BASE_URL = 'https://geoportal.cprm.gov.br/server/rest/services'
+// CPRM foi renomeada para SGB (Serviço Geológico do Brasil) e o domínio
+// migrou de geoportal.cprm.gov.br para geoportal.sgb.gov.br. O certificado
+// TLS do servidor só reconhece o novo host - usar o domínio antigo causa
+// falha de handshake ("Hostname/IP does not match certificate's altnames").
+export const CPRM_ARCGIS_BASE_URL = 'https://geoportal.sgb.gov.br/server/rest/services'
 export const MOVIMENTO_MASSA_LAYER_URL = `${CPRM_ARCGIS_BASE_URL}/gestaoterritorial/movimento_massa/MapServer/0`
 
 export interface MovimentoMassaBboxQuery {

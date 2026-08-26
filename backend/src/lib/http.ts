@@ -54,6 +54,11 @@ export function errorToStatus(err: unknown): { status: number; message: string }
     case 'NotImplementedError':
       return { status: 501, message }
     default:
-      return { status: 500, message: 'Erro interno do servidor.' }
+      // Antes devolvia só "Erro interno do servidor." sem detalhe nenhum,
+      // o que torna impossível diagnosticar pelo frontend/Render sem abrir
+      // os logs manualmente. Mantém status 500 (não sabemos a causa raiz),
+      // mas expõe a mensagem real do erro para acelerar o diagnóstico -
+      // mesmo espírito de describeError() (nunca esconder a causa real).
+      return { status: 500, message: `Erro interno do servidor: ${message}` }
   }
 }
