@@ -137,10 +137,18 @@ export async function fetchRealEarthquakes(): Promise<EarthquakesApiResponse> {
 }
 
 // Uma área de suscetibilidade a deslizamento (backend/src/types.ts -> LandslideSusceptibilityArea).
+export type RealLandslideGeometry =
+  | { type: 'Polygon'; coordinates: number[][][] }
+  | { type: 'MultiPolygon'; coordinates: number[][][][] }
+
 export interface RealLandslideArea {
   municipio: string | null
   uf: string | null
   classe: string | null
+  // Polígono real da área de suscetibilidade (CPRM/SGB, ArcGIS REST com
+  // returnGeometry=true). Null só se a fonte não devolver geometria para
+  // aquela feature específica - nunca substituído por forma inventada.
+  geometry: RealLandslideGeometry | null
   source: 'cprm-sgb'
 }
 

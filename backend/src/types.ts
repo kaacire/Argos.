@@ -175,6 +175,11 @@ export interface LandslideSusceptibilityArea {
   municipio: string | null
   uf: string | null
   classe: string | null
+  // Geometria real da área de suscetibilidade (Polygon/MultiPolygon,
+  // GeoJSON padrão) - null apenas se a própria API não retornar geometria
+  // para essa feature específica (não deve acontecer com returnGeometry=true,
+  // mas o campo é opcional por segurança, nunca inventamos um substituto).
+  geometry: { type: 'Polygon'; coordinates: number[][][] } | { type: 'MultiPolygon'; coordinates: number[][][][] } | null
   source: 'cprm-sgb'
 }
 

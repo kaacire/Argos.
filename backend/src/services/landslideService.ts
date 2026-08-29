@@ -67,6 +67,9 @@ function normalizeFeature(feature: ArcGisGeoJsonFeature): LandslideSusceptibilit
     municipio: properties.municipio ?? null,
     uf: properties.uf ?? null,
     classe: properties.classe ?? null,
+    // Geometria real da feature (agora que returnGeometry=true), repassada
+    // sem transformação - o frontend desenha exatamente essas coordenadas.
+    geometry: feature.geometry ?? null,
     source: 'cprm-sgb',
   }
 }

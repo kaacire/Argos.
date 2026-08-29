@@ -56,9 +56,13 @@ export async function queryMovimentoMassaByBbox(bbox: MovimentoMassaBboxQuery): 
   url.searchParams.set('outSR', '4326')
   url.searchParams.set('spatialRel', 'esriSpatialRelIntersects')
   url.searchParams.set('outFields', 'municipio,uf,classe')
-  // Não precisamos do polígono em si, só dos atributos - poupa banda e
-  // evita lidar com a geometria reprojetada.
-  url.searchParams.set('returnGeometry', 'false')
+  // returnGeometry=true: a camada "Movimento de Massa Área" É um polígono
+  // (área de suscetibilidade mapeada), não um ponto. Antes esta consulta
+  // pedia returnGeometry=false e o frontend desenhava um círculo genérico
+  // em torno de um ponto fixo no lugar da forma real - descartando dado
+  // espacial que a própria API sempre teve disponível. Corrigido para usar
+  // a geometria real (polígono, em WGS84 via outSR=4326 acima).
+  url.searchParams.set('returnGeometry', 'true')
 
   return validateFeatureCollection(await readJson<ArcGisGeoJsonFeatureCollection>(await fetch(url), 'CPRM ArcGIS (movimento_massa)'))
 }

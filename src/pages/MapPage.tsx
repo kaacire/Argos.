@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Circle, CircleMarker, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Circle, CircleMarker, Marker, Popup, GeoJSON, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import {
   AlertTriangle,
@@ -66,6 +66,22 @@ const userLocationIcon = new L.DivIcon({
   iconSize: [28, 28],
   iconAnchor: [14, 14],
 })
+
+// Escala visual documentada para a classe de suscetibilidade a
+// deslizamento retornada pela CPRM/SGB (campo `classe`, texto livre da
+// fonte). Mapeia a string real para uma cor de exibição - o valor
+// original (`area.classe`) nunca é alterado, continua exibido no popup
+// exatamente como veio da API. Classes não reconhecidas (nova
+// nomenclatura, erro de digitação na fonte etc.) caem no cinza neutro em
+// vez de assumir um nível de risco não confirmado.
+function landslideClasseColor(classe: string | null): string {
+  const normalized = (classe ?? '').toLowerCase()
+  if (normalized.includes('muito alta')) return '#7f1d1d'
+  if (normalized.includes('alta')) return '#f97316'
+  if (normalized.includes('média') || normalized.includes('media')) return '#eab308'
+  if (normalized.includes('baixa')) return '#84cc16'
+  return '#94a3b8'
+}
 
 // Força o Leaflet a recalcular as dimensões do mapa sempre que o container
 // muda de tamanho (ex: ao entrar/sair da tela cheia), evitando tiles cortados.
@@ -545,12 +561,18 @@ export default function MapPage() {
 
             {activeLayers.has('temperatura') && weatherState.status === 'success' && (
               <CircleMarker
-                center={SENTO_SE_COORDS}
-                radius={40}
+                // Ponto real consultado (backend retorna a coordenada
+                // efetivamente usada na chamada à Open-Meteo - não um valor
+                // hardcoded do frontend). Raio fixo pequeno: é a
+                // representação de UM ponto de medição, não uma área de
+                // cobertura - Open-Meteo não fornece geometria de área para
+                // temperatura, só um valor pontual.
+                center={[weatherState.data.latitude, weatherState.data.longitude]}
+                radius={10}
                 pathOptions={{
                   color: '#ef4444',
                   fillColor: '#ef4444',
-                  fillOpacity: 0.15,
+                  fillOpacity: 0.7,
                 }}
               >
                 <Popup>
@@ -558,6 +580,7 @@ export default function MapPage() {
                     <div className="font-semibold">
                       {weatherState.data.temperature}°C — {weatherState.data.condition}
                     </div>
+                    <div className="text-xs text-gray-500">Medição pontual (não representa uma área).</div>
                     <div>Umidade: {weatherState.data.humidity >= 0 ? `${weatherState.data.humidity}%` : 'indisponível'}</div>
                     <div>
                       Precipitação atual:{' '}
@@ -587,16 +610,23 @@ export default function MapPage() {
               weatherState.status === 'success' &&
               weatherState.data.windSpeed >= 3 && (
                 <CircleMarker
-                  center={SENTO_SE_COORDS}
-                  radius={25}
+                  center={[weatherState.data.latitude, weatherState.data.longitude]}
+                  radius={10}
                   pathOptions={{
                     color: '#8b5cf6',
                     fillColor: '#8b5cf6',
-                    fillOpacity: 0.2,
+                    fillOpacity: 0.7,
                   }}
                 >
                   <Popup>
-                    {`Vento atual: ${weatherState.data.windSpeed} km/h (Open-Meteo${weatherState.data.cached ? ', em cache' : ''}, ${new Date(weatherState.data.lastUpdate).toLocaleTimeString('pt-BR')})`}
+                    <div className="space-y-1 text-sm">
+                      <div className="font-semibold">Vento atual: {weatherState.data.windSpeed} km/h</div>
+                      <div className="text-xs text-gray-500">Medição pontual (não representa uma área).</div>
+                      <div className="text-xs text-gray-500">
+                        Open-Meteo{weatherState.data.cached ? ', em cache' : ''} — atualizado em{' '}
+                        {new Date(weatherState.data.lastUpdate).toLocaleTimeString('pt-BR')}
+                      </div>
+                    </div>
                   </Popup>
                 </CircleMarker>
               )}
@@ -620,38 +650,37 @@ export default function MapPage() {
             {activeLayers.has('deslizamentos') &&
               landslideState.status === 'success' &&
               landslideState.data.status === 'ok' &&
-              // Só marca o círculo de risco se pelo menos uma área retornada
-              // pela CPRM/SGB tiver classificação relevante. Se a classe real
-              // for "Baixa"/"Nula" (ou não informada), marcar um círculo
-              // grande de risco no mapa passaria uma informação falsa.
-              landslideState.data.data.areas.some(
-                (area) => area.classe && !/baixa|nula|nenhuma/i.test(area.classe)
-              ) && (
-                <CircleMarker
-                  center={SENTO_SE_COORDS}
-                  radius={30}
-                  pathOptions={{
-                    color: '#f97316',
-                    fillColor: '#f97316',
-                    fillOpacity: 0.3,
-                  }}
-                >
-                  <Popup>
-                    <div className="space-y-1 text-sm">
-                      <div className="font-semibold">Suscetibilidade a deslizamento</div>
-                      {landslideState.data.data.areas.map((area, i) => (
-                        <div key={i}>
+              // Desenha o polígono REAL de cada área retornada pela
+              // CPRM/SGB (returnGeometry=true) - nenhuma forma inventada.
+              // Áreas sem geometria (não deveria acontecer, mas por
+              // segurança) são simplesmente ignoradas, nunca substituídas
+              // por um círculo genérico. Mostra TODAS as classes, inclusive
+              // "Baixa" - omitir dado real de baixo risco seria menos
+              // honesto que mostrar, já que é uma informação real mapeada.
+              landslideState.data.data.areas.map((area, i) => {
+                if (!area.geometry) return null
+                const color = landslideClasseColor(area.classe)
+                return (
+                  <GeoJSON
+                    key={`deslizamento-${i}-${area.municipio}-${area.classe}-${landslideState.data.data.cached}`}
+                    data={{ type: 'Feature', geometry: area.geometry, properties: { classe: area.classe } }}
+                    style={() => ({ color, weight: 2, fillColor: color, fillOpacity: 0.35 })}
+                  >
+                    <Popup>
+                      <div className="space-y-1 text-sm">
+                        <div className="font-semibold">Suscetibilidade a deslizamento</div>
+                        <div>
                           {area.municipio ?? 'Município não informado'}
                           {area.uf ? ` - ${area.uf}` : ''}: classe {area.classe ?? 'não informada'}
                         </div>
-                      ))}
-                      <div className="text-xs text-gray-500">
-                        SGB/CPRM{landslideState.data.data.cached ? ', em cache' : ''}
+                        <div className="text-xs text-gray-500">
+                          SGB/CPRM{landslideState.data.data.cached ? ', em cache' : ''} - polígono real da carta de suscetibilidade
+                        </div>
                       </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              )}
+                    </Popup>
+                  </GeoJSON>
+                )
+              })}
 
             {activeLayers.has('sismos') &&
               earthquakeState.status === 'success' &&
@@ -729,23 +758,34 @@ export default function MapPage() {
                 </Marker>
               ))}
 
-            {activeLayers.has('rios') && riverState.status === 'success' && riverState.data.map((river, i) => (
-              <CircleMarker
-                key={`rio-${river.station}-${i}`}
-                center={[river.latitude ?? SENTO_SE_COORDS[0], river.longitude ?? SENTO_SE_COORDS[1]]}
-                radius={14}
-                pathOptions={{ color: '#1d4ed8', fillColor: '#1d4ed8', fillOpacity: 0.4 }}
-              >
-                <Popup>
-                  <div className="space-y-1 text-sm">
-                    <div className="font-semibold">Estação: {river.station}</div>
-                    <div>Nível: {river.level} {river.unit}</div>
-                    <div>Horário: {new Date(river.timestamp).toLocaleString('pt-BR')}</div>
-                    <div className="text-xs text-gray-500">Fonte: {river.source}{river.cached ? ' — cache' : ' — atual'}</div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+            {activeLayers.has('rios') &&
+              riverState.status === 'success' &&
+              riverState.data.map((river, i) => {
+                // Nunca substitui coordenada real ausente por um ponto
+                // hardcoded (ex: centro de Sento Sé) - se a estação da ANA
+                // não tiver lat/lng no inventário, o dado espacial
+                // simplesmente não existe, e a estação não é desenhada no
+                // mapa (mas continua disponível em outras views/listagens,
+                // se existirem).
+                if (river.latitude == null || river.longitude == null) return null
+                return (
+                  <CircleMarker
+                    key={`rio-${river.station}-${i}`}
+                    center={[river.latitude, river.longitude]}
+                    radius={14}
+                    pathOptions={{ color: '#1d4ed8', fillColor: '#1d4ed8', fillOpacity: 0.4 }}
+                  >
+                    <Popup>
+                      <div className="space-y-1 text-sm">
+                        <div className="font-semibold">Estação: {river.station}</div>
+                        <div>Nível: {river.level} {river.unit}</div>
+                        <div>Horário: {new Date(river.timestamp).toLocaleString('pt-BR')}</div>
+                        <div className="text-xs text-gray-500">Fonte: {river.source}{river.cached ? ' — cache' : ' — atual'}</div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                )
+              })}
           </MapContainer>
         </div>
 
