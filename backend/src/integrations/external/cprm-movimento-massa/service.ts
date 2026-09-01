@@ -14,7 +14,22 @@ import type { ArcGisGeoJsonFeatureCollection } from './types.js'
 // TLS do servidor só reconhece o novo host - usar o domínio antigo causa
 // falha de handshake ("Hostname/IP does not match certificate's altnames").
 export const CPRM_ARCGIS_BASE_URL = 'https://geoportal.sgb.gov.br/server/rest/services'
-export const MOVIMENTO_MASSA_LAYER_URL = `${CPRM_ARCGIS_BASE_URL}/gestaoterritorial/movimento_massa/MapServer/0`
+// A camada "movimento_massa" (suscetibilidade contínua a deslizamento por
+// município) NÃO EXISTE MAIS na estrutura nova do SGB - confirmado
+// listando a pasta gestaoterritorial inteira, ela sumiu na migração de
+// domínio/reorganização. A candidata mais próxima é "risco"
+// ("Setorização de Risco" / "Risco Geológico"), mas é um dado
+// estruturalmente diferente: setores de risco mapeados pontualmente pela
+// CPRM/Defesa Civil (ex: encostas específicas em áreas urbanas já
+// avaliadas em campo), não uma carta contínua de suscetibilidade por
+// município. Por isso é esperado que cubra MENOS áreas que antes -
+// ausência de dado aqui é ainda mais comum e legítima.
+//
+// ⚠️ NÃO TESTADO CONTRA UMA RESPOSTA REAL - mapeado só a partir da lista
+// de campos que o metadado público do ArcGIS REST expõe
+// (.../gestaoterritorial/risco/MapServer/0?f=pjson). O primeiro teste
+// real deve ser um curl no /api/landslide-susceptibility local.
+export const MOVIMENTO_MASSA_LAYER_URL = `${CPRM_ARCGIS_BASE_URL}/gestaoterritorial/risco/MapServer/0`
 
 export interface MovimentoMassaBboxQuery {
   minLongitude: number
@@ -55,7 +70,13 @@ export async function queryMovimentoMassaByBbox(bbox: MovimentoMassaBboxQuery): 
   url.searchParams.set('inSR', '4326')
   url.searchParams.set('outSR', '4326')
   url.searchParams.set('spatialRel', 'esriSpatialRelIntersects')
-  url.searchParams.set('outFields', 'municipio,uf,classe')
+  // Campos da camada "risco" (gestaoterritorial/risco/MapServer/0) - nomes
+  // diferentes da antiga "movimento_massa": munic (não municipio),
+  // grau_risco (não classe), mais tipolo_g1/tipolo_e1 (tipologia geral e
+  // específica do desastre - usado para filtrar só registros de
+  // movimento de massa, já que essa camada cobre vários tipos de risco
+  // na mesma tabela) e descricao/local para dar contexto real no popup.
+  url.searchParams.set('outFields', 'munic,uf,grau_risco,tipolo_g1,tipolo_e1,descricao,local')
   // returnGeometry=true: a camada "Movimento de Massa Área" É um polígono
   // (área de suscetibilidade mapeada), não um ponto. Antes esta consulta
   // pedia returnGeometry=false e o frontend desenhava um círculo genérico

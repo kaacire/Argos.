@@ -7,7 +7,7 @@ export const PORT = Number(process.env.PORT ?? 3001)
 
 export const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5173'
 
-export const WEATHER_CACHE_MINUTES = Number(process.env.WEATHER_CACHE_MINUTES ?? 15)
+export const WEATHER_CACHE_MINUTES = Number(process.env.WEATHER_CACHE_MINUTES ?? 30)
 
 // Cache da página Histórico (7d/3m/1y). Mais longo que o do clima atual
 // porque são dados do passado (não mudam de um minuto para o outro) - só
@@ -68,6 +68,21 @@ export const BRAZIL_BBOX = {
   maxLatitude: 6,
   minLongitude: -74,
   maxLongitude: -34,
+} as const
+
+// Bbox restrito à região de Sento Sé/BA (raio de ~1 grau, ~111km) - usado
+// como padrão da camada de sismos em vez de BRAZIL_BBOX. Decisão
+// temporária: mostrar o Brasil inteiro num mapa centrado/com zoom em uma
+// única cidade deixava o resultado inconsistente (círculos aparecendo
+// fora da área visível, sem relação com o que as outras camadas mostram).
+// BRAZIL_BBOX continua definido acima e pode ser passado via querystring
+// (?minlatitude=&maxlatitude=...) quando o app expandir para nível
+// nacional - não foi removido, só deixou de ser o padrão.
+export const SENTO_SE_BBOX = {
+  minLatitude: SENTO_SE_COORDS[0] - 1,
+  maxLatitude: SENTO_SE_COORDS[0] + 1,
+  minLongitude: SENTO_SE_COORDS[1] - 1,
+  maxLongitude: SENTO_SE_COORDS[1] + 1,
 } as const
 
 // Cache de leitura de GET /api/landslide-susceptibility (CPRM/SGB - OGC API,

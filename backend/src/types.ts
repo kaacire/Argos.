@@ -175,6 +175,12 @@ export interface LandslideSusceptibilityArea {
   municipio: string | null
   uf: string | null
   classe: string | null
+  // Tipologia real do registro (tipolo_e1/tipolo_g1 da camada "risco") e
+  // descrição/local, quando disponíveis - contexto adicional que a
+  // camada "risco" fornece e a antiga "movimento_massa" não tinha.
+  tipologia: string | null
+  local: string | null
+  descricao: string | null
   // Geometria real da área de suscetibilidade (Polygon/MultiPolygon,
   // GeoJSON padrão) - null apenas se a própria API não retornar geometria
   // para essa feature específica (não deve acontecer com returnGeometry=true,

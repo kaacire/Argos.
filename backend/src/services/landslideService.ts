@@ -61,12 +61,34 @@ async function fetchFromCprm(lat: number, lng: number): Promise<ArcGisGeoJsonFea
   }
 }
 
-function normalizeFeature(feature: ArcGisGeoJsonFeature): LandslideSusceptibilityArea {
+// A camada "risco" cobre vários tipos de desastre na mesma tabela
+// (inundação, movimento de massa, erosão etc.), diferenciados pelos
+// campos de tipologia. Filtra só o que é relacionado a movimento de
+// massa/deslizamento - sem esse filtro, a camada "Deslizamentos" do mapa
+// mostraria também enchente e outros tipos, o que seria enganoso.
+//
+// ⚠️ Lista de termos NÃO VALIDADA contra dado real (não consegui rodar
+// uma query de teste) - baseada no vocabulário usual do COBRADE
+// (classificação de desastres da Defesa Civil brasileira) para esse
+// grupo. Ajustar aqui assim que houver uma resposta real pra conferir os
+// valores exatos que tipolo_g1/tipolo_e1 realmente usam.
+const MOVIMENTO_MASSA_KEYWORDS = /movimento de massa|deslizamento|escorregamento|corrida de massa|queda de bloco|ruptura de talude/i
+
+function isMovimentoDeMassa(properties: ArcGisMovimentoMassaProperties): boolean {
+  const text = `${properties.tipolo_g1 ?? ''} ${properties.tipolo_e1 ?? ''}`
+  return MOVIMENTO_MASSA_KEYWORDS.test(text)
+}
+
+function normalizeFeature(feature: ArcGisGeoJsonFeature): LandslideSusceptibilityArea | null {
   const properties = feature.properties ?? {}
+  if (!isMovimentoDeMassa(properties)) return null
   return {
-    municipio: properties.municipio ?? null,
+    municipio: properties.munic ?? null,
     uf: properties.uf ?? null,
-    classe: properties.classe ?? null,
+    classe: properties.grau_risco ?? null,
+    tipologia: properties.tipolo_e1 ?? properties.tipolo_g1 ?? null,
+    local: properties.local ?? null,
+    descricao: properties.descricao ?? null,
     // Geometria real da feature (agora que returnGeometry=true), repassada
     // sem transformação - o frontend desenha exatamente essas coordenadas.
     geometry: feature.geometry ?? null,
@@ -105,7 +127,7 @@ export async function getLandslideSusceptibilityForCoords(lat: number, lng: numb
   if (cached) return rowToResponse(cached, lat, lng, true)
 
   const features = await fetchFromCprm(lat, lng)
-  const areas = features.map(normalizeFeature)
+  const areas = features.map(normalizeFeature).filter((area): area is LandslideSusceptibilityArea => area !== null)
 
   const row = await prisma.landslideSusceptibilityCache.create({
     data: {

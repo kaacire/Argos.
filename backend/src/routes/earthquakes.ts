@@ -5,12 +5,12 @@ import { getEarthquakes, DEFAULT_EARTHQUAKE_QUERY } from '../services/earthquake
 // GET /api/earthquakes
 // GET /api/earthquakes?minlatitude=&maxlatitude=&minlongitude=&maxlongitude=&minmagnitude=&days=
 //
-// Sem parâmetros, usa DEFAULT_EARTHQUAKE_QUERY: bounding box do Brasil
-// inteiro (BRAZIL_BBOX, config.ts) - não é limitado a Sento Sé como
-// /api/weather ou /api/rivers, porque atividade sísmica não é um dado
-// "pontual" e este endpoint já nasce pensado para cobrir o país todo
-// (ver histórico do projeto: o dado de Sento Sé é o que será expandido
-// para nível nacional no futuro).
+// Sem parâmetros, usa DEFAULT_EARTHQUAKE_QUERY: bbox restrito à região de
+// Sento Sé/BA (SENTO_SE_BBOX, config.ts) - simplificação temporária
+// enquanto o app não tem uma forma consistente de mostrar dados
+// nacionais num mapa com zoom/centro fixo em uma cidade. Continua
+// possível pedir uma área maior via querystring (minlatitude= etc.),
+// então nada foi removido - só o padrão mudou.
 //
 // Fonte: USGS Earthquake Catalog (earthquake.usgs.gov), catálogo GLOBAL -
 // ver backend/src/services/earthquakeService.ts para o porquê da escolha

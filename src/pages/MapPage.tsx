@@ -30,6 +30,7 @@ import {
   type RealRiver,
   type RealEarthquakeEvent,
   type LandslideApiResponse,
+  type RealLandslideData,
 } from '../data/mapApi'
 import { riskZoneConfig } from '../utils/riskColors'
 import 'leaflet/dist/leaflet.css'
@@ -83,6 +84,63 @@ function landslideClasseColor(classe: string | null): string {
   return '#94a3b8'
 }
 
+// Componente dedicado para as áreas de deslizamento (em vez de fazer o
+// .map() inline dentro do JSX do MapPage). Motivo: o TypeScript não
+// consegue "lembrar" da checagem `landslideState.data.status === 'ok'`
+// dentro do callback de .map() (o narrowing de union não atravessa
+// fronteiras de função/closure) - isso causava os erros TS18047
+// ("possibly null") no build do Netlify. Recebendo `data` já como prop
+// tipada (RealLandslideData | null), sem union para o TS re-inferir, o
+// problema não existe mais.
+function LandslideAreas({ data }: { data: RealLandslideData | null }) {
+  if (!data) return null
+  return (
+    <>
+      {data.areas.map((area, i) => {
+        if (!area.geometry) return null
+        const color = landslideClasseColor(area.classe)
+        // O componente <GeoJSON> do react-leaflet espera um tipo do pacote
+        // `geojson` (não instalado como dependência explícita do projeto),
+        // então o TS não consegue verificar a forma exata esperada aqui -
+        // daí o erro TS2353 no build. O objeto abaixo segue o padrão
+        // GeoJSON Feature real (mesma forma que a API do ArcGIS devolve,
+        // já validada por `area.geometry` ser Polygon/MultiPolygon). Cast
+        // via `unknown` (não referencia o namespace `GeoJSON` do pacote
+        // `geojson`, que pode nem estar instalado) - ponte de tipos segura
+        // em runtime, não um "any" escondendo um bug real.
+        const feature: unknown = {
+          type: 'Feature' as const,
+          geometry: area.geometry,
+          properties: { classe: area.classe },
+        }
+        return (
+          <GeoJSON
+            key={`deslizamento-${i}-${area.municipio}-${area.classe}-${data.cached}`}
+            data={feature as Parameters<typeof GeoJSON>[0]['data']}
+            style={() => ({ color, weight: 2, fillColor: color, fillOpacity: 0.35 })}
+          >
+            <Popup>
+              <div className="space-y-1 text-sm">
+                <div className="font-semibold">Risco de movimento de massa</div>
+                <div>
+                  {area.municipio ?? 'Município não informado'}
+                  {area.uf ? ` - ${area.uf}` : ''}: grau {area.classe ?? 'não informado'}
+                </div>
+                {area.tipologia && <div className="text-xs">Tipologia: {area.tipologia}</div>}
+                {area.local && <div className="text-xs">Local: {area.local}</div>}
+                {area.descricao && <div className="text-xs">{area.descricao}</div>}
+                <div className="text-xs text-gray-500">
+                  SGB/CPRM{data.cached ? ', em cache' : ''} - setor de risco mapeado em campo (não é uma carta contínua de suscetibilidade)
+                </div>
+              </div>
+            </Popup>
+          </GeoJSON>
+        )
+      })}
+    </>
+  )
+}
+
 // Força o Leaflet a recalcular as dimensões do mapa sempre que o container
 // muda de tamanho (ex: ao entrar/sair da tela cheia), evitando tiles cortados.
 function MapResizeHandler({ trigger }: { trigger: boolean }) {
@@ -92,6 +150,68 @@ function MapResizeHandler({ trigger }: { trigger: boolean }) {
     return () => clearTimeout(id)
   }, [trigger, map])
   return null
+}
+
+// Escalas geográficas do mapa: Cidade / Estado / Região. Cada uma trava o
+// mapa (via maxBounds + minZoom) para não deixar o usuário navegar/dar
+// zoom-out além do nível escolhido.
+//
+// ⚠️ LIMITAÇÃO CONHECIDA: os limites abaixo são retângulos (bounding box)
+// aproximados, não a geometria política real de Bahia/Nordeste (que exigiria
+// um GeoJSON oficial do IBGE das divisas de estado/região - não incluído
+// aqui). Na prática isso significa que, por exemplo, um pedacinho de
+// Minas Gerais ou Goiás pode ficar visível dentro do "limite" do Nordeste,
+// porque a região não é um retângulo perfeito. Ajustar isso exigiria
+// carregar a malha territorial oficial, o que fica para uma etapa futura.
+//
+// Também importante: mudar a escala aqui só muda o QUE O MAPA MOSTRA
+// (viewport/zoom permitido) - não muda quais dados são consultados no
+// backend. As camadas continuam trazendo dado real só da região de Sento
+// Sé (ver SENTO_SE_BBOX no backend) - abrir a escala "Estado" ou "Região"
+// não faz aparecer dado de outras cidades, só permite ver mais mapa vazio
+// ao redor do que já existe.
+type MapScope = 'cidade' | 'estado' | 'regiao'
+
+const MAP_SCOPES: Record<
+  MapScope,
+  { label: string; center: [number, number]; zoom: number; minZoom: number; maxZoom: number; bounds: L.LatLngBoundsLiteral }
+> = {
+  cidade: {
+    label: 'Cidade',
+    center: SENTO_SE_COORDS,
+    zoom: 13,
+    minZoom: 11,
+    maxZoom: 18,
+    // Área urbana de Sento Sé + entorno próximo (~15km de raio).
+    bounds: [
+      [-9.88, -42.42],
+      [-9.60, -42.09],
+    ],
+  },
+  estado: {
+    label: 'Estado (BA)',
+    center: [-12.5, -41.7],
+    zoom: 6,
+    minZoom: 6,
+    maxZoom: 12,
+    // Bbox retangular aproximado do estado da Bahia.
+    bounds: [
+      [-18.5, -46.7],
+      [-8.4, -37.0],
+    ],
+  },
+  regiao: {
+    label: 'Região (Nordeste)',
+    center: [-8.5, -39.5],
+    zoom: 5,
+    minZoom: 5,
+    maxZoom: 10,
+    // Bbox retangular aproximado cobrindo os 9 estados do Nordeste.
+    bounds: [
+      [-18.5, -46.7],
+      [-1.0, -34.3],
+    ],
+  },
 }
 
 // Captura a instância do mapa Leaflet (via useMap, só funciona dentro do
@@ -160,10 +280,43 @@ export default function MapPage() {
   // center/zoom padrão do MapContainer, que continua fixo em Sento Sé.
   const mapInstanceRef = useRef<L.Map | null>(null)
 
+  // Escala geográfica ativa (Cidade/Estado/Região) - ver MAP_SCOPES acima.
+  const [mapScope, setMapScope] = useState<MapScope>('cidade')
+
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    const scope = MAP_SCOPES[mapScope]
+    map.setMaxBounds(scope.bounds)
+    map.setMinZoom(scope.minZoom)
+    map.setMaxZoom(scope.maxZoom)
+    map.setView(scope.center, scope.zoom)
+  }, [mapScope])
+
   // Localização real do usuário, via API de geolocalização do navegador.
   // Não depende do backend - é lida direto do dispositivo.
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
+
+  // Move o mapa até a localização real do usuário - MAS só se ela caber
+  // dentro do retângulo (maxBounds) da escala ativa. Tentar forçar o mapa
+  // pra um ponto fora do limite trava com o próprio maxBounds e o Leaflet
+  // calcula um centro sem sentido pra "puxar de volta" (foi isso que
+  // mandou o mapa pro meio do oceano no escopo Cidade) - a correção não é
+  // ajustar essa conta, é nunca tentar sair da área que a escala permite.
+  const goToMyLocation = () => {
+    const map = mapInstanceRef.current
+    if (!map || !userLocation) return
+    const bounds = L.latLngBounds(MAP_SCOPES[mapScope].bounds)
+    if (!bounds.contains(userLocation)) {
+      setLocationError(
+        `Sua localização está fora da área da escala "${MAP_SCOPES[mapScope].label}". Troque de escala para conseguir vê-la.`
+      )
+      return
+    }
+    setLocationError(null)
+    map.flyTo(userLocation, MAP_SCOPES[mapScope].maxZoom - 2)
+  }
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -203,89 +356,108 @@ export default function MapPage() {
   // de Sento Sé (GET /api/landslide-susceptibility). Ver src/data/mapApi.ts.
   const [landslideState, setLandslideState] = useState<MapApiState<LandslideApiResponse>>({ status: 'loading' })
 
+  // Cada camada só busca dado real na PRIMEIRA vez que é ativada - antes,
+  // as 5 fontes (incluindo as 3 chamadas da chuva) eram buscadas assim
+  // que a página abria, mesmo sem nenhuma camada clicada. Isso gastava
+  // até 4 chamadas reais ao Open-Meteo por simples visita/refresh da
+  // página, contribuindo pros 429 (limite de requisições) que a fonte
+  // grátis retorna quando o IP compartilhado do Render é usado demais.
+  const fetchedGroupsRef = useRef<Set<string>>(new Set())
+
   useEffect(() => {
-    let cancelled = false
-    setWeatherState({ status: 'loading' })
-
-    fetchRealWeather(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
-      .then((data) => {
-        if (!cancelled) setWeatherState({ status: 'success', data })
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setWeatherState({
-            status: 'error',
-            message: err instanceof Error ? err.message : 'Não foi possível carregar os dados do clima.',
-          })
-        }
-      })
-
-    return () => {
-      cancelled = true
+    if ((activeLayers.has('temperatura') || activeLayers.has('ventania')) && !fetchedGroupsRef.current.has('weather')) {
+      fetchedGroupsRef.current.add('weather')
+      let cancelled = false
+      setWeatherState({ status: 'loading' })
+      fetchRealWeather(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
+        .then((data) => {
+          if (!cancelled) setWeatherState({ status: 'success', data })
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setWeatherState({
+              status: 'error',
+              message: err instanceof Error ? err.message : 'Não foi possível carregar os dados do clima.',
+            })
+          }
+        })
+      return () => {
+        cancelled = true
+      }
     }
-  }, [])
+  }, [activeLayers])
 
   useEffect(() => {
-    let cancelled = false
-    setRainState({ status: 'loading' })
-
-    fetchRealRainLayer()
-      .then((points) => {
-        if (!cancelled) setRainState({ status: 'success', data: points })
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setRainState({
-            status: 'error',
-            message: err instanceof Error ? err.message : 'Não foi possível carregar a camada de chuva.',
-          })
-        }
-      })
-
-    return () => {
-      cancelled = true
+    if (activeLayers.has('chuva') && !fetchedGroupsRef.current.has('rain')) {
+      fetchedGroupsRef.current.add('rain')
+      let cancelled = false
+      setRainState({ status: 'loading' })
+      fetchRealRainLayer()
+        .then((points) => {
+          if (!cancelled) setRainState({ status: 'success', data: points })
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setRainState({
+              status: 'error',
+              message: err instanceof Error ? err.message : 'Não foi possível carregar a camada de chuva.',
+            })
+          }
+        })
+      return () => {
+        cancelled = true
+      }
     }
-  }, [])
+  }, [activeLayers])
 
   useEffect(() => {
-    let cancelled = false
-    setRiverState({ status: 'loading' })
-    fetchRealRivers(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
-      .then((result) => {
-        if (cancelled) return
-        setRiverState({ status: 'success', data: result.status === 'no-data' || !result.data ? [] : [result.data] })
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setRiverState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar os dados dos rios.' })
-      })
-    return () => { cancelled = true }
-  }, [])
+    if (activeLayers.has('rios') && !fetchedGroupsRef.current.has('rivers')) {
+      fetchedGroupsRef.current.add('rivers')
+      let cancelled = false
+      setRiverState({ status: 'loading' })
+      fetchRealRivers(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
+        .then((result) => {
+          if (cancelled) return
+          setRiverState({ status: 'success', data: result.status === 'no-data' || !result.data ? [] : [result.data] })
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setRiverState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar os dados dos rios.' })
+        })
+      return () => { cancelled = true }
+    }
+  }, [activeLayers])
 
   useEffect(() => {
-    let cancelled = false
-    setEarthquakeState({ status: 'loading' })
-    fetchRealEarthquakes()
-      .then((result) => {
-        if (!cancelled) setEarthquakeState({ status: 'success', data: result.events })
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setEarthquakeState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar os dados de terremotos.' })
-      })
-    return () => { cancelled = true }
-  }, [])
+    if (activeLayers.has('sismos') && !fetchedGroupsRef.current.has('earthquakes')) {
+      fetchedGroupsRef.current.add('earthquakes')
+      let cancelled = false
+      setEarthquakeState({ status: 'loading' })
+      fetchRealEarthquakes()
+        .then((result) => {
+          if (!cancelled) setEarthquakeState({ status: 'success', data: result.events })
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setEarthquakeState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar os dados de terremotos.' })
+        })
+      return () => { cancelled = true }
+    }
+  }, [activeLayers])
 
   useEffect(() => {
-    let cancelled = false
-    setLandslideState({ status: 'loading' })
-    fetchRealLandslideSusceptibility(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
-      .then((result) => {
-        if (!cancelled) setLandslideState({ status: 'success', data: result })
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLandslideState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar a suscetibilidade a deslizamento.' })
-      })
-    return () => { cancelled = true }
-  }, [])
+    if (activeLayers.has('deslizamentos') && !fetchedGroupsRef.current.has('landslide')) {
+      fetchedGroupsRef.current.add('landslide')
+      let cancelled = false
+      setLandslideState({ status: 'loading' })
+      fetchRealLandslideSusceptibility(SENTO_SE_COORDS[0], SENTO_SE_COORDS[1])
+        .then((result) => {
+          if (!cancelled) setLandslideState({ status: 'success', data: result })
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setLandslideState({ status: 'error', message: err instanceof Error ? err.message : 'Não foi possível carregar a suscetibilidade a deslizamento.' })
+        })
+      return () => { cancelled = true }
+    }
+  }, [activeLayers])
 
   const toggleLayer = (id: string) => {
     setActiveLayers((prev) => {
@@ -299,24 +471,56 @@ export default function MapPage() {
   return (
     <div className={isFullscreen ? 'fixed inset-0 z-[9999] flex flex-col bg-white' : 'page-container animate-fade-in'}>
       {isFullscreen ? (
-        <div className="flex items-center justify-between bg-primary-700 px-4 py-3 text-white">
-          <div>
-            <h1 className="text-base font-bold">Mapa de Riscos</h1>
-            <p className="text-xs text-white/80">Sento Sé - BA</p>
+        <div className="bg-primary-700 px-4 py-3 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-base font-bold">Mapa de Riscos</h1>
+              <p className="text-xs text-white/80">Sento Sé - BA</p>
+            </div>
+            <button
+              onClick={() => setIsFullscreen(false)}
+              className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-2 text-sm font-medium transition-colors hover:bg-white/30"
+            >
+              <Minimize2 size={16} />
+              Sair da tela cheia
+            </button>
           </div>
-          <button
-            onClick={() => setIsFullscreen(false)}
-            className="flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-2 text-sm font-medium transition-colors hover:bg-white/30"
-          >
-            <Minimize2 size={16} />
-            Sair da tela cheia
-          </button>
+          <div className="mt-2 flex gap-2">
+            {(Object.keys(MAP_SCOPES) as MapScope[]).map((scope) => (
+              <button
+                key={scope}
+                onClick={() => setMapScope(scope)}
+                className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
+                  mapScope === scope ? 'bg-white text-primary-700' : 'bg-white/15 text-white/80'
+                }`}
+              >
+                {MAP_SCOPES[scope].label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         <PageHeader title="Mapa de Riscos" subtitle="Sento Sé - BA" />
       )}
 
       <div className={isFullscreen ? 'relative min-h-0 flex-1' : 'px-4 pt-4'}>
+        {!isFullscreen && (
+          <div className="mb-3 flex gap-2">
+            {(Object.keys(MAP_SCOPES) as MapScope[]).map((scope) => (
+              <button
+                key={scope}
+                onClick={() => setMapScope(scope)}
+                className={`flex-1 rounded-xl border-2 py-2 text-xs font-semibold transition-colors ${
+                  mapScope === scope
+                    ? 'border-primary-500 bg-primary-50 text-primary-700'
+                    : 'border-slate-200 bg-white text-slate-500'
+                }`}
+              >
+                {MAP_SCOPES[scope].label}
+              </button>
+            ))}
+          </div>
+        )}
         <div
           className={isFullscreen ? 'relative h-full' : 'card relative overflow-hidden map-hide-attribution'}
           style={isFullscreen ? undefined : { height: '340px' }}
@@ -346,7 +550,7 @@ export default function MapPage() {
               </div>
               {userLocation && (
                 <button
-                  onClick={() => mapInstanceRef.current?.flyTo(userLocation, 16)}
+                  onClick={goToMyLocation}
                   title="Centralizar na minha localização"
                   className="absolute right-2 top-2 z-[1000] flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-md transition-colors hover:bg-slate-50"
                 >
@@ -366,7 +570,7 @@ export default function MapPage() {
               </button>
               {userLocation && (
                 <button
-                  onClick={() => mapInstanceRef.current?.flyTo(userLocation, 16)}
+                  onClick={goToMyLocation}
                   title="Centralizar na minha localização - o mapa fica em Sento Sé por padrão, então sua posição real pode estar fora da área visível"
                   className="absolute right-2 top-12 z-[1000] flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-md transition-colors hover:bg-slate-50"
                 >
@@ -479,9 +683,29 @@ export default function MapPage() {
             </div>
           )}
 
-          <MapContainer center={SENTO_SE_COORDS} zoom={14} scrollWheelZoom={isFullscreen} style={{ height: '100%', width: '100%' }}>
+          <MapContainer
+            center={MAP_SCOPES.cidade.center}
+            zoom={MAP_SCOPES.cidade.zoom}
+            minZoom={MAP_SCOPES.cidade.minZoom}
+            maxZoom={MAP_SCOPES.cidade.maxZoom}
+            maxBounds={MAP_SCOPES.cidade.bounds}
+            scrollWheelZoom={isFullscreen}
+            style={{ height: '100%', width: '100%' }}
+          >
             <MapResizeHandler trigger={isFullscreen} />
-            <MapInstanceCapture onReady={(map) => { mapInstanceRef.current = map }} />
+            <MapInstanceCapture
+              onReady={(map) => {
+                mapInstanceRef.current = map
+                // Aplica os limites da escala atual assim que o mapa fica
+                // pronto (não espera o usuário trocar de escala pra
+                // primeira vez) - sem isso, o mapa nasceria sem nenhuma
+                // trava de navegação até a primeira troca manual.
+                const scope = MAP_SCOPES[mapScope]
+                map.setMaxBounds(scope.bounds)
+                map.setMinZoom(scope.minZoom)
+                map.setMaxZoom(scope.maxZoom)
+              }}
+            />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -649,38 +873,9 @@ export default function MapPage() {
 
             {activeLayers.has('deslizamentos') &&
               landslideState.status === 'success' &&
-              landslideState.data.status === 'ok' &&
-              // Desenha o polígono REAL de cada área retornada pela
-              // CPRM/SGB (returnGeometry=true) - nenhuma forma inventada.
-              // Áreas sem geometria (não deveria acontecer, mas por
-              // segurança) são simplesmente ignoradas, nunca substituídas
-              // por um círculo genérico. Mostra TODAS as classes, inclusive
-              // "Baixa" - omitir dado real de baixo risco seria menos
-              // honesto que mostrar, já que é uma informação real mapeada.
-              landslideState.data.data.areas.map((area, i) => {
-                if (!area.geometry) return null
-                const color = landslideClasseColor(area.classe)
-                return (
-                  <GeoJSON
-                    key={`deslizamento-${i}-${area.municipio}-${area.classe}-${landslideState.data.data.cached}`}
-                    data={{ type: 'Feature', geometry: area.geometry, properties: { classe: area.classe } }}
-                    style={() => ({ color, weight: 2, fillColor: color, fillOpacity: 0.35 })}
-                  >
-                    <Popup>
-                      <div className="space-y-1 text-sm">
-                        <div className="font-semibold">Suscetibilidade a deslizamento</div>
-                        <div>
-                          {area.municipio ?? 'Município não informado'}
-                          {area.uf ? ` - ${area.uf}` : ''}: classe {area.classe ?? 'não informada'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          SGB/CPRM{landslideState.data.data.cached ? ', em cache' : ''} - polígono real da carta de suscetibilidade
-                        </div>
-                      </div>
-                    </Popup>
-                  </GeoJSON>
-                )
-              })}
+              landslideState.data.status === 'ok' && (
+                <LandslideAreas data={landslideState.data.data} />
+              )}
 
             {activeLayers.has('sismos') &&
               earthquakeState.status === 'success' &&

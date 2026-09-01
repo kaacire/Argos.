@@ -145,6 +145,12 @@ export interface RealLandslideArea {
   municipio: string | null
   uf: string | null
   classe: string | null
+  // Campos novos da camada "risco" (substituta de "movimento_massa",
+  // descontinuada pelo SGB) - tipologia real do registro e contexto de
+  // campo (local/descrição), quando a fonte fornece.
+  tipologia: string | null
+  local: string | null
+  descricao: string | null
   // Polígono real da área de suscetibilidade (CPRM/SGB, ArcGIS REST com
   // returnGeometry=true). Null só se a fonte não devolver geometria para
   // aquela feature específica - nunca substituído por forma inventada.

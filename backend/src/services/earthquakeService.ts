@@ -20,7 +20,7 @@
 // -----------------------------------------------------------------------
 
 import { prisma } from '../db.js'
-import { BRAZIL_BBOX, EARTHQUAKE_CACHE_MINUTES, EARTHQUAKE_DEFAULT_DAYS, EARTHQUAKE_DEFAULT_MIN_MAGNITUDE } from '../config.js'
+import { SENTO_SE_BBOX, EARTHQUAKE_CACHE_MINUTES, EARTHQUAKE_DEFAULT_DAYS, EARTHQUAKE_DEFAULT_MIN_MAGNITUDE } from '../config.js'
 import { EarthquakeEventData, EarthquakesResponse, InvalidCoordinatesError, InvalidParameterError, UpstreamUnavailableError } from '../types.js'
 import { queryUsgsEarthquakes } from '../integrations/external/usgs-earthquake/index.js'
 import type { UsgsEarthquakeFeature } from '../integrations/external/usgs-earthquake/index.js'
@@ -36,10 +36,10 @@ export interface EarthquakeQuery {
 }
 
 export const DEFAULT_EARTHQUAKE_QUERY: EarthquakeQuery = {
-  minLatitude: BRAZIL_BBOX.minLatitude,
-  maxLatitude: BRAZIL_BBOX.maxLatitude,
-  minLongitude: BRAZIL_BBOX.minLongitude,
-  maxLongitude: BRAZIL_BBOX.maxLongitude,
+  minLatitude: SENTO_SE_BBOX.minLatitude,
+  maxLatitude: SENTO_SE_BBOX.maxLatitude,
+  minLongitude: SENTO_SE_BBOX.minLongitude,
+  maxLongitude: SENTO_SE_BBOX.maxLongitude,
   minMagnitude: EARTHQUAKE_DEFAULT_MIN_MAGNITUDE,
   days: EARTHQUAKE_DEFAULT_DAYS,
 }
