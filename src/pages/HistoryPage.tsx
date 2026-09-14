@@ -213,23 +213,23 @@ function StatCard({ title, unit, stats }: StatCardProps) {
         <div className="grid grid-cols-3 gap-1 text-center">
           <div>
             <div className="text-[10px] text-slate-400">Máx</div>
-            <div className="text-sm font-bold text-slate-800">
+            <div className="text-sm font-bold leading-tight text-slate-800">
               {stats.max}
-              {unit}
+              <span className="block text-[10px] font-normal text-slate-500">{unit}</span>
             </div>
           </div>
           <div>
             <div className="text-[10px] text-slate-400">Mín</div>
-            <div className="text-sm font-bold text-slate-800">
+            <div className="text-sm font-bold leading-tight text-slate-800">
               {stats.min}
-              {unit}
+              <span className="block text-[10px] font-normal text-slate-500">{unit}</span>
             </div>
           </div>
           <div>
             <div className="text-[10px] text-slate-400">Média</div>
-            <div className="text-sm font-bold text-slate-800">
+            <div className="text-sm font-bold leading-tight text-slate-800">
               {stats.avg}
-              {unit}
+              <span className="block text-[10px] font-normal text-slate-500">{unit}</span>
             </div>
           </div>
         </div>

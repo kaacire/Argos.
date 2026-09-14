@@ -296,17 +296,38 @@ export default function MapPage() {
   // Localização real do usuário, via API de geolocalização do navegador.
   // Não depende do backend - é lida direto do dispositivo.
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
+  // Precisão da última leitura, em metros (position.coords.accuracy) - o
+  // navegador manda essa informação junto com toda leitura de posição.
+  // A PRIMEIRA leitura do watchPosition costuma ser rápida e imprecisa
+  // (baseada em Wi-Fi/rede, às vezes com erro de vários km), refinando
+  // pra uma posição precisa via GPS alguns segundos depois. Sem checar
+  // isso, o botão "Minha localização" podia usar essa primeira leitura
+  // ruim e concluir errado que você está fora da escala ativa.
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
 
+  // Acima desse raio de incerteza (metros), não confiamos na leitura pra
+  // decidir se você está dentro/fora da escala "Cidade" (~15km de raio) -
+  // um erro de 5km pode facilmente colocar uma posição real dentro da
+  // cidade como "fora" por engano.
+  const LOCATION_ACCURACY_THRESHOLD_METERS = 2000
+
   // Move o mapa até a localização real do usuário - MAS só se ela caber
-  // dentro do retângulo (maxBounds) da escala ativa. Tentar forçar o mapa
-  // pra um ponto fora do limite trava com o próprio maxBounds e o Leaflet
+  // dentro do retângulo (maxBounds) da escala ativa E a leitura for
+  // precisa o suficiente pra confiar nela. Tentar forçar o mapa pra um
+  // ponto fora do limite trava com o próprio maxBounds e o Leaflet
   // calcula um centro sem sentido pra "puxar de volta" (foi isso que
   // mandou o mapa pro meio do oceano no escopo Cidade) - a correção não é
   // ajustar essa conta, é nunca tentar sair da área que a escala permite.
   const goToMyLocation = () => {
     const map = mapInstanceRef.current
     if (!map || !userLocation) return
+    if (locationAccuracy !== null && locationAccuracy > LOCATION_ACCURACY_THRESHOLD_METERS) {
+      setLocationError(
+        `Sinal de localização ainda impreciso (margem de ${Math.round(locationAccuracy / 1000)}km) - aguarde alguns segundos e tente de novo.`
+      )
+      return
+    }
     const bounds = L.latLngBounds(MAP_SCOPES[mapScope].bounds)
     if (!bounds.contains(userLocation)) {
       setLocationError(
@@ -327,6 +348,7 @@ export default function MapPage() {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         setUserLocation([position.coords.latitude, position.coords.longitude])
+        setLocationAccuracy(position.coords.accuracy)
         setLocationError(null)
       },
       (err) => {
